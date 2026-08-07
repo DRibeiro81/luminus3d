@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vasos e Luminárias 3D</title>
+<style>
+  :root {
+    --bg: #14161a; --painel: #1c1f25; --linha: #2b3038;
+    --texto: #e7eaef; --fraco: #8b93a1; --destaque: #d9a441;
+  }
+  * { box-sizing: border-box; }
+  /* Regra de autor vence o display:none que o navegador dá ao [hidden]. */
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--texto); display: flex;
+    height: 100vh; overflow: hidden;
+  }
+
+  /* Topo fixo (título e abas), miolo que rola, rodapé fixo com a ação
+     principal — antes o botão de baixar ficava no fim e exigia rolar. */
+  aside {
+    width: 310px; flex: 0 0 310px; background: var(--painel);
+    border-right: 1px solid var(--linha); max-height: 100vh;
+    display: flex; flex-direction: column;
+  }
+  aside > header { padding: 16px 18px 0; border-bottom: 1px solid var(--linha); }
+  aside > .corpo { flex: 1; overflow-y: auto; padding: 0 18px 16px; }
+  aside > footer { padding: 12px 18px 14px; border-top: 1px solid var(--linha); }
+
+  h1 { font-size: 17px; margin: 0 0 2px; }
+  .sub { color: var(--fraco); font-size: 12px; margin-bottom: 12px; }
+  .sub a { color: var(--destaque); }
+
+  .etapa, details { border-top: 1px solid var(--linha); margin-top: 12px; padding-top: 11px; }
+  .corpo > .grupo:first-child > .etapa { border-top: 0; margin-top: 0; padding-top: 14px; }
+  .tit, summary {
+    color: var(--fraco); font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .08em; margin: 0 0 11px;
+  }
+  /* Avançado recolhido: parede e fundo estragam a peça se mexidos sem saber. */
+  summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: '+'; font-size: 14px; line-height: 1; opacity: .7; }
+  details[open] summary::after { content: '\2212'; }
+  details:not([open]) summary { margin-bottom: 0; }
+  .dica { margin: 6px 0 0; font-size: 11px; color: var(--fraco); line-height: 1.45; }
+  button.menor { padding: 8px; font-size: 13px; }
+
+  .abas { display: flex; gap: 4px; margin-bottom: 14px; background: #12141a; padding: 4px; border-radius: 9px; }
+  .abas button {
+    flex: 1; padding: 7px 4px; font-size: 12px; font-weight: 500; border-radius: 6px;
+    background: transparent; color: var(--fraco); margin: 0;
+  }
+  .abas button.ativa { background: var(--destaque); color: #1a1206; font-weight: 600; }
+
+  fieldset { border: 0; border-top: 1px solid var(--linha); margin: 14px 0 0; padding: 12px 0 0; }
+  legend { color: var(--fraco); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+  label { display: block; margin-bottom: 10px; }
+  .rot { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
+  .rot span:last-child { color: var(--destaque); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--destaque); }
+  select { width: 100%; padding: 6px 8px; background: #12141a; color: var(--texto);
+           border: 1px solid var(--linha); border-radius: 6px; font-size: 13px; }
+  .caixa { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; font-size: 13px; }
+  .caixa input { accent-color: var(--destaque); }
+
+  button {
+    width: 100%; padding: 10px; border: 0; border-radius: 8px; font-size: 14px;
+    font-weight: 600; cursor: pointer; margin-top: 8px; background: var(--destaque); color: #1a1206;
+  }
+  button.vazio { background: transparent; border: 1px solid var(--linha); color: var(--texto); font-weight: 500; }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+
+  main { flex: 1; display: flex; flex-direction: column; padding: 18px; gap: 12px;
+         min-width: 0; min-height: 0; }
+  #palco { flex: 1; position: relative; border-radius: 14px; overflow: hidden; background: #0f1114; }
+  #gl { width: 100%; height: 100%; display: block; cursor: grab; }
+  #gl:active { cursor: grabbing; }
+  #dica { position: absolute; left: 14px; bottom: 12px; font-size: 12px; color: var(--fraco); pointer-events: none; }
+
+  /* sem isto o atributo hidden não esconde: a regra de cima é mais específica
+     que o display:none que o navegador aplica em [hidden] */
+
+  /* Barra de números sempre à vista, colada no rodapé da área central. */
+  #dados { display: flex; gap: 22px; flex-wrap: wrap; border-top: 1px solid var(--linha);
+           padding-top: 11px; font-size: 12px; color: var(--fraco); flex: 0 0 auto; }
+  #dados b { display: block; color: var(--texto); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  #aviso { color: var(--destaque); font-size: 12px; min-height: 18px; }
+</style>
+</head>
+<body>
+
+<aside>
+  <header>
+    <h1>Vasos e Luminárias</h1>
+    <div class="sub">Gera o STL pronto. <a href="app.html">Quadros</a> · <a href="luz.html">Foto na Luz</a></div>
+    <div class="abas">
+      <button data-aba="lum" class="ativa">Luminária</button>
+      <button data-aba="par">Vaso livre</button>
+      <button data-aba="base">Base</button>
+    </div>
+  </header>
+
+  <div class="corpo">
+
+    <div class="grupo" data-de="lum">
+      <div class="etapa">
+        <p class="tit">Cúpula</p>
+        <label style="margin-bottom:0">
+          <div class="rot"><span>Formato pronto</span></div>
+          <select id="cupula">
+            <option value="livre">Livre (ajusto na mão)</option>
+            <option value="conica">Cônica</option>
+            <option value="tambor">Tambor</option>
+            <option value="sino">Sino</option>
+            <option value="imperio">Império</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="grupo" data-de="lum par">
+      <div class="etapa">
+        <p class="tit">Forma</p>
+        <label><div class="rot"><span>Diâmetro embaixo</span><span id="vDB">90 mm</span></div>
+          <input type="range" id="db" min="40" max="220" step="2" value="90"></label>
+        <label><div class="rot"><span>Diâmetro em cima</span><span id="vDT">90 mm</span></div>
+          <input type="range" id="dt" min="40" max="220" step="2" value="90"></label>
+        <label><div class="rot"><span>Altura</span><span id="vAlt">150 mm</span></div>
+          <input type="range" id="alt" min="50" max="240" step="5" value="150"></label>
+        <label style="margin-bottom:0"><div class="rot"><span>Barriga</span><span id="vBar">0 mm</span></div>
+          <input type="range" id="bar" min="-20" max="30" step="1" value="0"></label>
+      </div>
+    </div>
+
+    <div class="grupo" data-de="lum">
+      <div class="etapa">
+        <p class="tit">Vazado</p>
+        <label>
+          <div class="rot"><span>Tipo</span></div>
+          <select id="vazTipo">
+            <option value="ranhuras">Ranhuras verticais</option>
+            <option value="grade">Grade</option>
+            <option value="trelica">Treliça diagonal</option>
+          </select>
+        </label>
+        <label><div class="rot"><span>Distância entre ripas</span><span id="vVazPasso">10 mm</span></div>
+          <input type="range" id="vazPasso" min="5" max="25" step="0.5" value="10"></label>
+        <label><div class="rot"><span>Largura da ripa</span><span id="vVazLarg">3,0 mm</span></div>
+          <input type="range" id="vazLarg" min="1.5" max="10" step="0.1" value="3"></label>
+        <label data-de="grade"><div class="rot"><span>Anéis</span><span id="vVazAneis">3</span></div>
+          <input type="range" id="vazAneis" min="0" max="8" step="1" value="3"></label>
+        <label data-de="trelica" style="margin-bottom:0"><div class="rot"><span>Inclinação</span><span id="vVazIncl">1,0</span></div>
+          <input type="range" id="vazIncl" min="0.4" max="3" step="0.1" value="1"></label>
+      </div>
+      <div class="etapa">
+        <p class="tit">Bordas e topo</p>
+        <label><div class="rot"><span>Borda de baixo</span><span id="vBandaB">8 mm</span></div>
+          <input type="range" id="bandaB" min="3" max="30" step="1" value="8"></label>
+        <label><div class="rot"><span>Borda de cima</span><span id="vBandaT">8 mm</span></div>
+          <input type="range" id="bandaT" min="3" max="30" step="1" value="8"></label>
+        <div class="caixa"><input type="checkbox" id="topoFechado"><span>Topo fechado (pendente)</span></div>
+        <label data-de="topo"><div class="rot"><span>Furo do topo</span><span id="vFuroTopo">12 mm</span></div>
+          <input type="range" id="furoTopo" min="6" max="40" step="1" value="12"></label>
+        <label style="margin-bottom:0"><div class="rot"><span>Fundo</span><span id="vFundoL">aberto</span></div>
+          <input type="range" id="fundoL" min="0" max="5" step="0.5" value="0"></label>
+      </div>
+    </div>
+
+    <div class="grupo" data-de="par" hidden>
+      <div class="etapa">
+        <p class="tit">Desenho</p>
+        <label><div class="rot"><span>Facetas</span><span id="vFac">redondo</span></div>
+          <input type="range" id="fac" min="0" max="12" step="1" value="0"></label>
+        <label><div class="rot"><span>Ondulação</span><span id="vOnd">0%</span></div>
+          <input type="range" id="ond" min="0" max="30" step="1" value="0"></label>
+        <label><div class="rot"><span>Gomos</span><span id="vPet">8</span></div>
+          <input type="range" id="pet" min="3" max="24" step="1" value="8"></label>
+        <label style="margin-bottom:0"><div class="rot"><span>Torção</span><span id="vTor">0°</span></div>
+          <input type="range" id="tor" min="-720" max="720" step="15" value="0"></label>
+      </div>
+    </div>
+
+    <div class="grupo" data-de="base" hidden>
+      <div class="etapa">
+        <p class="tit">Encaixe</p>
+        <label><div class="rot"><span>Diâmetro da peça</span><span id="vBDP">90 mm</span></div>
+          <input type="range" id="bdp" min="40" max="220" step="2" value="90"></label>
+        <label><div class="rot"><span>Parede da peça</span><span id="vBPP">1,4 mm</span></div>
+          <input type="range" id="bpp" min="0.8" max="3" step="0.1" value="1.4"></label>
+        <label><div class="rot"><span>Folga do encaixe</span><span id="vBF">0,4 mm</span></div>
+          <input type="range" id="bf" min="0.1" max="1" step="0.05" value="0.4"></label>
+        <label><div class="rot"><span>Profundidade do encaixe</span><span id="vBPE">4 mm</span></div>
+          <input type="range" id="bpe" min="2" max="10" step="0.5" value="4"></label>
+        <button class="vazio menor" id="btCopiar">Copiar medidas do vaso</button>
+      </div>
+      <div class="etapa">
+        <p class="tit">Luz e fio</p>
+        <label>
+          <div class="rot"><span>Tipo de luz</span></div>
+          <select id="tipoLuz">
+            <option value="led">Fita ou anel de LED</option>
+            <option value="e27">Lâmpada E27 (soquete)</option>
+          </select>
+        </label>
+        <label><div class="rot"><span>Altura da base</span><span id="vBH">14 mm</span></div>
+          <input type="range" id="bh" min="8" max="35" step="1" value="14"></label>
+        <label><div class="rot"><span>Furo do fio</span><span id="vBFF">8 mm</span></div>
+          <input type="range" id="bff" min="3" max="16" step="0.5" value="8"></label>
+        <label><div class="rot"><span id="rotLuz">Anel de LED</span><span id="vBL">45 mm</span></div>
+          <input type="range" id="bl" min="15" max="120" step="1" value="45"></label>
+        <label><div class="rot"><span>Fundura do anel</span><span id="vBPL">4 mm</span></div>
+          <input type="range" id="bpl" min="1.5" max="22" step="0.5" value="4"></label>
+        <label style="margin-bottom:0"><div class="rot"><span>Borda externa</span><span id="vBB">5 mm</span></div>
+          <input type="range" id="bb" min="0" max="20" step="1" value="5"></label>
+      </div>
+    </div>
+
+    <details class="grupo" data-de="lum par">
+      <summary>Ajustes de impressão</summary>
+      <label><div class="rot"><span>Parede</span><span id="vPar">1,4 mm</span></div>
+        <input type="range" id="par" min="0.8" max="3" step="0.1" value="1.4"></label>
+      <label style="margin-bottom:0"><div class="rot"><span>Fundo</span><span id="vFundoP">2,5 mm</span></div>
+        <input type="range" id="fundoP" min="1" max="6" step="0.5" value="2.5"></label>
+    </details>
+
+  </div>
+
+  <footer>
+    <button id="btStl">Baixar STL</button>
+    <p class="dica" style="color:var(--destaque)">Fatie em 100%, sem redimensionar.</p>
+  </footer>
+</aside>
+
+<main>
+  <div id="palco">
+    <canvas id="gl"></canvas>
+    <div id="dica">Arraste pra girar, role pra aproximar.</div>
+              </div>
+  <div id="dados">
+    <div>Tamanho<b id="dTam">—</b></div>
+    <div>Peças<b id="dPecas">—</b></div>
+    <div>Triângulos<b id="dTris">—</b></div>
+    <div>Filamento<b id="dPeso">—</b></div>
+  </div>
+  <div id="aviso"></div>
+</main>
+
+<script type="module">
+import { vasoParametrico, luminariaVazada, baseLuminaria, escreverStl }
+  from "./geometria.js";
+import { criarVisor } from "./visor3d.js";
+
+const DENSIDADE = 1.24;
+const $ = id => document.getElementById(id);
+
+let aba = "lum";
+let ultimo = null;
+
+/* ================================================================
+   Prévia em 3D (módulo compartilhado com o Foto na Luz)
+   ================================================================ */
+
+const cv = $("gl");
+const visor = criarVisor(cv);
+const enviarMalha = (tris) => visor.ok && visor.enviar(tris);
+const desenhar = () => visor.ok && visor.desenhar();
+const iniciarGl = () => visor.ok;
+
+/* ================================================================
+   Monta a peça da aba atual
+   ================================================================ */
+
+const n = (v, d = 1) => v.toFixed(d).replace(".", ",");
+
+function forma() {
+  return { diametroBase: +$("db").value, diametroTopo: +$("dt").value,
+           altura: +$("alt").value, barriga: +$("bar").value, parede: +$("par").value };
+}
+
+function construir(final) {
+  const detalhe = final ? 1 : 0.5;
+
+  if (aba === "lum") {
+    const op = { ...forma(),
+      ondulacao: +$("ond").value / 100, petalas: +$("pet").value,
+      torcao: +$("tor").value, facetas: +$("fac").value,
+      fundo: +$("fundoL").value,
+      bandaBase: +$("bandaB").value, bandaTopo: +$("bandaT").value,
+      passoVazado: +$("vazPasso").value, largRipa: +$("vazLarg").value,
+      aneis: $("vazTipo").value === "grade" ? +$("vazAneis").value : 0,
+      alturaAnel: +$("vazLarg").value,   // anel da mesma espessura da ripa
+      trelica: $("vazTipo").value === "trelica",
+      inclinacaoRipa: +$("vazIncl").value,
+      topoFechado: $("topoFechado").checked, furoTopo: +$("furoTopo").value,
+      detalhe };
+    const r = luminariaVazada(op);
+    return { ...r, op, rotulo: `${op.diametroBase} × ${op.altura} mm` };
+  }
+
+  if (aba === "par") {
+    const op = { ...forma(), ondulacao: +$("ond").value / 100, petalas: +$("pet").value,
+                 torcao: +$("tor").value, facetas: +$("fac").value, fundo: +$("fundoP").value,
+                 detalhe };
+    const r = vasoParametrico(op);
+    return { ...r, op, rotulo: `${op.diametroBase} × ${op.altura} mm` };
+  }
+
+  const op = { diametroPeca: +$("bdp").value, paredePeca: +$("bpp").value, folga: +$("bf").value,
+               alturaBase: +$("bh").value, furoFio: +$("bff").value, diametroLed: +$("bl").value,
+               profundidadeLed: +$("bpl").value, profundidadeEncaixe: +$("bpe").value,
+               bordaExterna: +$("bb").value };
+  const r = baseLuminaria(op);
+  return { ...r, op, rotulo: `${Math.round(r.rExt * 2)} × ${op.alturaBase} mm` };
+}
+
+function recalcular() {
+  const r = construir(false);
+  if (!r) { $("dTam").textContent = "—"; return; }
+  ultimo = r;
+  enviarMalha(r.tris);
+  desenhar();
+
+  $("dTam").textContent = r.rotulo;
+  $("dPecas").textContent = r.nRipas ? `${r.nRipas} ripas` : "1";
+  $("dTris").textContent = r.tris.length.toLocaleString("pt-BR");
+  $("dPeso").textContent = `~${Math.round(r.volume * DENSIDADE)} g`;
+
+  const av = [];
+  if (r.avisos) av.push(...r.avisos);
+  if (aba === "base")
+    av.push("O peso é da peça cheia; com preenchimento de 15% o slicer vai dar bem menos.");
+  if (r.inclinacao > 45) av.push(`Parede inclinada ${Math.round(r.inclinacao)}° — acima de 45° a impressora imprime no ar. Suavize a forma.`);
+  $("aviso").textContent = av.join("  ");
+}
+
+let pendente = false;
+function agendar() {
+  if (pendente) return;
+  pendente = true;
+  requestAnimationFrame(() => { pendente = false; recalcular(); });
+}
+
+// Gancho pra automação dirigir a página de fora (testes). Não muda comportamento.
+// `recalcular` direto evita depender do requestAnimationFrame, que não dispara
+// em iframe no navegador sem tela.
+window.__vaso = { construir, recalcular, agendar, visor: () => visor };
+
+/* ================================================================
+   Baixar
+   ================================================================ */
+
+$("btStl").onclick = () => {
+  const bt = $("btStl"), antes = bt.textContent;
+  bt.textContent = "Montando…"; bt.disabled = true;
+  setTimeout(() => {
+    try {
+      const r = construir(true);
+      if (r) {
+        const nome = aba === "lum" ? "luminaria.stl"
+                   : aba === "par" ? "vaso.stl" : "base-luminaria.stl";
+        const url = URL.createObjectURL(new Blob([escreverStl(r.tris)], { type: "model/stl" }));
+        const a = document.createElement("a");
+        a.href = url; a.download = nome; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      }
+    } finally { bt.textContent = antes; bt.disabled = false; }
+  }, 20);
+};
+
+/* ================================================================
+   Abas, rótulos e ligação dos controles
+   ================================================================ */
+
+document.querySelectorAll(".abas button").forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll(".abas button").forEach(o => o.classList.toggle("ativa", o === b));
+    aba = b.dataset.aba;
+    document.querySelectorAll(".grupo").forEach(g => g.hidden = !g.dataset.de.split(" ").includes(aba));
+    agendar();
+  };
+});
+
+$("btCopiar").onclick = () => {
+  $("bdp").value = $("db").value;
+  $("bpp").value = $("par").value;
+  rotulos(); agendar();
+};
+
+/** Formatos de cúpula prontos: proporções que já nascem certas. */
+const CUPULAS = {
+  conica:  { db: 100, dt: 170, alt: 150, bar: 0 },
+  tambor:  { db: 150, dt: 150, alt: 140, bar: 0 },
+  sino:    { db: 90,  dt: 170, alt: 150, bar: 14 },
+  imperio: { db: 120, dt: 170, alt: 130, bar: -10 },
+};
+
+function aplicarCupula() {
+  const c = CUPULAS[$("cupula").value];
+  if (!c) return;
+  for (const [id, v] of Object.entries(c)) $(id).value = String(v);
+}
+
+/** Mostra só os controles que valem pro tipo de vazado e pro tipo de luz. */
+function porTipo() {
+  const tipo = $("vazTipo").value;
+  for (const el of document.querySelectorAll('label[data-de="grade"]')) el.hidden = tipo !== "grade";
+  for (const el of document.querySelectorAll('label[data-de="trelica"]')) el.hidden = tipo !== "trelica";
+  for (const el of document.querySelectorAll('label[data-de="topo"]')) el.hidden = !$("topoFechado").checked;
+  // A lâmpada E27 pede um assento bem maior e mais fundo que um anel de LED.
+  const e27 = $("tipoLuz").value === "e27";
+  $("rotLuz").textContent = e27 ? "Assento do soquete" : "Anel de LED";
+  // A FUNDURA é o que separa os dois: anel de LED é raso, soquete é fundo. Usar
+  // o diâmetro como pista não serve — 45 mm serve pra anel e pra soquete.
+  const fundo = +$("bpl").value;
+  if (e27 && fundo < 10) { $("bl").value = "40"; $("bpl").value = "14"; }
+  if (!e27 && fundo >= 10) { $("bl").value = "45"; $("bpl").value = "4"; }
+}
+
+function rotulos() {
+  $("vDB").textContent = $("db").value + " mm";
+  $("vDT").textContent = $("dt").value + " mm";
+  $("vAlt").textContent = $("alt").value + " mm";
+  $("vBar").textContent = $("bar").value + " mm";
+  $("vPar").textContent = n(+$("par").value) + " mm";
+  $("vFac").textContent = +$("fac").value < 3 ? "redondo" : $("fac").value + " lados";
+  $("vOnd").textContent = $("ond").value + "%";
+  $("vPet").textContent = $("pet").value;
+  $("vTor").textContent = $("tor").value + "°";
+  $("vFundoP").textContent = n(+$("fundoP").value) + " mm";
+  $("vBDP").textContent = $("bdp").value + " mm";
+  $("vBPP").textContent = n(+$("bpp").value) + " mm";
+  $("vBF").textContent = n(+$("bf").value, 2) + " mm";
+  $("vBPE").textContent = n(+$("bpe").value) + " mm";
+  $("vBH").textContent = $("bh").value + " mm";
+  $("vBFF").textContent = n(+$("bff").value) + " mm";
+  $("vBL").textContent = $("bl").value + " mm";
+  $("vBPL").textContent = n(+$("bpl").value) + " mm";
+  $("vBB").textContent = $("bb").value + " mm";
+  $("vVazPasso").textContent = $("vazPasso").value + " mm";
+  $("vVazLarg").textContent = n(+$("vazLarg").value) + " mm";
+  $("vVazAneis").textContent = $("vazAneis").value;
+  $("vVazIncl").textContent = n(+$("vazIncl").value);
+  $("vBandaB").textContent = $("bandaB").value + " mm";
+  $("vBandaT").textContent = $("bandaT").value + " mm";
+  $("vFuroTopo").textContent = $("furoTopo").value + " mm";
+  $("vFundoL").textContent = +$("fundoL").value === 0 ? "aberto" : n(+$("fundoL").value) + " mm";
+}
+
+document.querySelectorAll("aside input[type=range], aside input[type=checkbox], aside select").forEach(el =>
+  el.addEventListener("input", () => {
+    if (el.id === "cupula") aplicarCupula();
+    if (["vazTipo", "topoFechado", "tipoLuz"].includes(el.id)) porTipo();
+    rotulos();
+    agendar();
+  }));
+
+porTipo();
+rotulos();
+
+// abre direto numa aba com ?aba=par ou ?aba=base
+const pedida = new URLSearchParams(location.search).get("aba");
+if (["lum", "par", "base"].includes(pedida)) {
+  document.querySelector(`.abas button[data-aba="${pedida}"]`).click();
+}
+
+if (!iniciarGl()) {
+  $("dica").textContent = "Este navegador não abriu o 3D (falta WebGL), mas os números e o STL funcionam.";
+}
+agendar();
+</script>
+</body>
+</html>

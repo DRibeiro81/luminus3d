@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Foto na Luz</title>
+<style>
+  :root {
+    --bg: #14161a; --painel: #1c1f25; --linha: #2b3038;
+    --texto: #e7eaef; --fraco: #8b93a1; --destaque: #d9a441;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--texto); display: flex;
+    height: 100vh; overflow: hidden;
+  }
+  aside {
+    width: 300px; flex: 0 0 300px; background: var(--painel);
+    border-right: 1px solid var(--linha); max-height: 100vh;
+    display: flex; flex-direction: column;
+  }
+  aside > header { padding: 16px 18px 12px; border-bottom: 1px solid var(--linha); }
+  aside > .corpo { flex: 1; overflow-y: auto; padding: 0 18px 16px; }
+  aside > footer { padding: 12px 18px 14px; border-top: 1px solid var(--linha); }
+  h1 { font-size: 17px; margin: 0 0 2px; }
+  .sub { color: var(--fraco); font-size: 12px; }
+  .sub a { color: var(--destaque); }
+
+  .etapa, details { border-top: 1px solid var(--linha); margin-top: 12px; padding-top: 11px; }
+  .corpo > .etapa:first-child { border-top: 0; margin-top: 0; padding-top: 14px; }
+  .tit, summary {
+    color: var(--fraco); font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .08em; margin: 0 0 11px;
+  }
+  .tit b { color: var(--destaque); margin-right: 7px; }
+  summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: '+'; font-size: 14px; line-height: 1; opacity: .7; }
+  details[open] summary::after { content: '\2212'; }
+  details:not([open]) summary { margin-bottom: 0; }
+
+  label { display: block; margin-bottom: 9px; }
+  .rot { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .rot span:last-child { color: var(--destaque); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--destaque); }
+  select, input[type=number] {
+    width: 100%; padding: 6px 8px; background: #12141a; color: var(--texto);
+    border: 1px solid var(--linha); border-radius: 6px; font-size: 13px;
+  }
+  .caixa { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+  .caixa input { accent-color: var(--destaque); }
+  .dica { margin: 6px 0 0; font-size: 11px; color: var(--fraco); line-height: 1.45; }
+  .lado { display: flex; gap: 8px; }
+  .lado button { margin-top: 0; }
+  button {
+    width: 100%; padding: 10px; border: 0; border-radius: 8px; font-size: 14px;
+    font-weight: 600; cursor: pointer; margin-top: 8px;
+    background: var(--destaque); color: #1a1206;
+  }
+  button.vazio { background: transparent; border: 1px solid var(--linha); color: var(--texto); font-weight: 500; }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+
+  main { flex: 1; display: flex; flex-direction: column; padding: 18px; gap: 14px;
+         min-width: 0; min-height: 0; }
+  #palco { flex: 1; display: flex; overflow: auto; min-height: 0;
+           border-radius: 14px; background: #0f1114; position: relative; }
+  #tela { margin: auto; max-width: 100%; height: auto; border-radius: 8px; }
+
+  #solta, #confirmar, #montando {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px; text-align: center;
+    background: #0f1114; border: 2px dashed var(--linha); border-radius: 14px;
+    padding: 24px; color: var(--fraco);
+  }
+  #solta.sobre { border-color: var(--destaque); }
+  #solta b, #confirmar b { color: var(--texto); font-size: 16px; }
+  #solta kbd { background: #262b33; border: 1px solid var(--linha); border-radius: 4px; padding: 1px 6px; font-size: 12px; }
+  #miniatura { max-width: min(420px, 60%); max-height: 46vh; border-radius: 10px; box-shadow: 0 6px 30px #0009; }
+  #confirmar .lado { width: 280px; }
+  .tracos { display: flex; flex-direction: column; gap: 5px; width: 260px; }
+  .tracos i { display: block; height: 4px; border-radius: 2px; background: var(--destaque);
+              transform-origin: left center; animation: cresce 1.6s ease-in-out infinite; }
+  @keyframes cresce { 0%,100% { transform: scaleX(.12); opacity:.35 } 50% { transform: scaleX(1); opacity:1 } }
+  .barra { width: 260px; height: 3px; background: var(--linha); border-radius: 2px; overflow: hidden; }
+  .barra i { display: block; height: 100%; width: 0; background: var(--destaque); }
+  .barra.correndo i { animation: enche 5s linear forwards; }
+  @keyframes enche { to { width: 100% } }
+
+  #dados { display: flex; gap: 22px; flex-wrap: wrap; border-top: 1px solid var(--linha);
+           padding-top: 12px; font-size: 12px; color: var(--fraco); flex: 0 0 auto; }
+  #dados b { display: block; color: var(--texto); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  #aviso { color: var(--destaque); font-size: 12px; min-height: 18px; }
+</style>
+</head>
+<body>
+
+<aside>
+  <header>
+    <h1>Foto na Luz</h1>
+    <div class="sub">Apagada é uma placa branca; acesa, aparece a foto.
+      <a href="app.html">Quadros</a> · <a href="vaso.html">Vasos</a></div>
+  </header>
+
+  <div class="corpo">
+    <div class="etapa">
+      <p class="tit"><b>1</b>Foto</p>
+      <button class="vazio" id="btEscolher">Escolher imagem…</button>
+      <input type="file" id="arquivo" accept="image/*" hidden>
+      <div class="caixa" style="margin-top:12px"><input type="checkbox" id="autoc" checked><span>Ajustar contraste sozinho</span></div>
+      <div class="caixa"><input type="checkbox" id="inverter"><span>Inverter (negativo)</span></div>
+      <label style="margin-bottom:0">
+        <div class="rot"><span>Peso do desenho</span><span id="vGama">1,00</span></div>
+        <input type="range" id="gama" min="0.4" max="2" step="0.05" value="1">
+        <p class="dica">Menos peso clareia a foto acesa; mais peso escurece.</p>
+      </label>
+    </div>
+
+    <div class="etapa">
+      <p class="tit"><b>2</b>Formato</p>
+      <label>
+        <div class="rot"><span>Tipo</span></div>
+        <select id="forma">
+          <option value="placa">Placa (quadro de mesa)</option>
+          <option value="cupula">Cúpula (abajur)</option>
+        </select>
+      </label>
+
+      <div data-de="placa">
+        <label>
+          <div class="rot"><span>Largura da peça (mm)</span></div>
+          <input type="number" id="largura" min="40" max="250" step="1" value="120">
+        </label>
+        <label>
+          <div class="rot"><span>Curvatura</span><span id="vArco">reta</span></div>
+          <input type="range" id="arco" min="0" max="2" step="0.05" value="0">
+          <p class="dica">Curvar dá rigidez: placa fina e reta empena ao esfriar.</p>
+        </label>
+        <label style="margin-bottom:0">
+          <div class="rot"><span>Moldura</span><span id="vMoldura">sem moldura</span></div>
+          <input type="range" id="moldura" min="0" max="15" step="0.5" value="0">
+        </label>
+      </div>
+
+      <div data-de="cupula" hidden>
+        <label>
+          <div class="rot"><span>Diâmetro (mm)</span></div>
+          <input type="number" id="diametro" min="50" max="200" step="1" value="100">
+        </label>
+        <label>
+          <div class="rot"><span>Altura (mm)</span></div>
+          <input type="number" id="alturaCup" min="50" max="250" step="1" value="150">
+        </label>
+        <label style="margin-bottom:0">
+          <div class="rot"><span>Bordas cheias</span><span id="vBanda">8 mm</span></div>
+          <input type="range" id="banda" min="0" max="25" step="1" value="8">
+          <p class="dica">Faixa cheia em cima e embaixo: dá rigidez e é por ela
+            que a peça assenta na base.</p>
+        </label>
+      </div>
+    </div>
+
+    <details>
+      <summary>Ajustes de impressão</summary>
+      <label>
+        <div class="rot"><span>Parte mais clara</span><span id="vMin">0,80 mm</span></div>
+        <input type="range" id="espMin" min="0.4" max="1.6" step="0.05" value="0.8">
+      </label>
+      <label>
+        <div class="rot"><span>Parte mais escura</span><span id="vMax">3,20 mm</span></div>
+        <input type="range" id="espMax" min="1.5" max="6" step="0.1" value="3.2">
+      </label>
+      <label style="margin-bottom:0">
+        <div class="rot"><span>Finura da malha</span><span id="vPasso">0,30 mm</span></div>
+        <input type="range" id="passo" min="0.15" max="0.6" step="0.05" value="0.3">
+      </label>
+      <div class="caixa" style="margin-top:10px"><input type="checkbox" id="comPe" checked><span>Gerar o pé de apoio</span></div>
+    </details>
+
+    <details>
+      <summary>Ver</summary>
+      <label style="margin-bottom:0">
+        <div class="rot"><span>Como</span></div>
+        <select id="modo">
+          <option value="acesa">Acesa (com luz atrás)</option>
+          <option value="apagada">Apagada (na mão)</option>
+        </select>
+      </label>
+    </details>
+  </div>
+
+  <footer>
+    <div class="lado">
+      <button id="btPainel" disabled style="flex:2">Baixar painel</button>
+      <button class="vazio" id="btPe" disabled style="flex:1">Pé</button>
+    </div>
+    <p class="dica" style="color:var(--destaque)">Imprima <b>em pé</b>, camada 0,1 mm,
+      100% de preenchimento, sem suporte.</p>
+  </footer>
+</aside>
+
+<main>
+  <div id="palco">
+    <canvas id="tela"></canvas>
+    <div id="solta">
+      <b>Cole a foto aqui</b>
+      <div><kbd>⌘</kbd> + <kbd>V</kbd>, ou arraste o arquivo pra cá</div>
+      <div style="font-size:12px">Rosto de perto funciona melhor que paisagem.</div>
+    </div>
+    <div id="confirmar" hidden>
+      <img id="miniatura" alt="Foto escolhida">
+      <b>É esta foto?</b>
+      <div class="lado">
+        <button id="btGerar" style="flex:2">Gerar</button>
+        <button class="vazio" id="btCancelar" style="flex:1">Cancelar</button>
+      </div>
+    </div>
+    <div id="montando" hidden>
+      <div class="tracos" id="tracos"></div>
+      <p>Montando a peça…</p>
+      <div class="barra" id="barra"><i></i></div>
+    </div>
+  </div>
+
+  <div id="dados">
+    <div>Peça<b id="dTam">—</b></div>
+    <div>Espessura<b id="dEsp">—</b></div>
+    <div>Malha<b id="dMalha">—</b></div>
+    <div>Filamento<b id="dPeso">—</b></div>
+    <div>Tempo<b id="dTempo">—</b></div>
+    <div>Arquivo<b id="dArq">—</b></div>
+  </div>
+  <div id="aviso"></div>
+</main>
+
+<script type="module">
+import { painelDeLuz, cupulaDeLuz, peDeApoio } from './litofania.js';
+import { escreverStl } from './geometria.js';
+
+const DENSIDADE = 1.24;
+const $ = (id) => document.getElementById(id);
+let imagem = null, nomeBase = 'foto';
+let fotoPendente = null, urlPendente = null, ultimo = null;
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function mostrarArea(qual) {
+  for (const id of ['solta', 'confirmar', 'montando']) $(id).hidden = id !== qual;
+}
+
+/* ---------------- entrada ---------------- */
+function carregarArquivo(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  nomeBase = (file.name || 'foto').replace(/\.[^.]+$/, '') || 'foto';
+  if (urlPendente) URL.revokeObjectURL(urlPendente);
+  urlPendente = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => { fotoPendente = img; $('miniatura').src = urlPendente; mostrarArea('confirmar'); };
+  img.onerror = () => { URL.revokeObjectURL(urlPendente); urlPendente = null; alert('Não consegui abrir essa imagem.'); };
+  img.src = urlPendente;
+}
+$('btEscolher').onclick = () => $('arquivo').click();
+$('arquivo').onchange = (e) => carregarArquivo(e.target.files[0]);
+document.addEventListener('paste', (e) => { for (const f of e.clipboardData.files) { carregarArquivo(f); return; } });
+['dragenter', 'dragover'].forEach((ev) => document.addEventListener(ev, (e) => { e.preventDefault(); $('solta').classList.add('sobre'); }));
+['dragleave', 'drop'].forEach((ev) => document.addEventListener(ev, (e) => { e.preventDefault(); $('solta').classList.remove('sobre'); }));
+document.addEventListener('drop', (e) => carregarArquivo(e.dataTransfer.files[0]));
+
+/* ---------------- imagem -> escuridão ---------------- */
+function amostrar(colunas, linhas) {
+  // Recorta no centro pra bater com a proporção pedida. Sem isso a foto seria
+  // ESPREMIDA — na cúpula o retângulo aberto quase nunca tem a proporção da
+  // foto, e o rosto sairia deformado na peça, não só na tela.
+  const alvo = colunas / linhas;
+  const lp = imagem.naturalWidth, ap = imagem.naturalHeight;
+  let sx = 0, sy = 0, sw = lp, sh = ap;
+  if (Math.abs(lp / ap - alvo) > 1e-3) {
+    if (lp / ap > alvo) { sw = Math.round(ap * alvo); sx = (lp - sw) >> 1; }
+    else { sh = Math.round(lp / alvo); sy = (ap - sh) >> 1; }
+  }
+
+  let cv = document.createElement('canvas');
+  cv.width = sw; cv.height = sh;
+  const c0 = cv.getContext('2d');
+  c0.fillStyle = '#fff'; c0.fillRect(0, 0, sw, sh);
+  c0.drawImage(imagem, sx, sy, sw, sh, 0, 0, sw, sh);
+  while (cv.width > colunas * 2 && cv.height > linhas * 2) {
+    const p = document.createElement('canvas');
+    p.width = Math.max(colunas, cv.width >> 1); p.height = Math.max(linhas, cv.height >> 1);
+    const x = p.getContext('2d'); x.imageSmoothingQuality = 'high';
+    x.drawImage(cv, 0, 0, p.width, p.height); cv = p;
+  }
+  const fim = document.createElement('canvas');
+  fim.width = colunas; fim.height = linhas;
+  const c = fim.getContext('2d');
+  c.imageSmoothingQuality = 'high';
+  c.fillStyle = '#fff'; c.fillRect(0, 0, colunas, linhas);
+  c.drawImage(cv, 0, 0, colunas, linhas);
+  let px;
+  try { px = c.getImageData(0, 0, colunas, linhas).data; }
+  catch { throw new Error('BLOQUEIO_FILE'); }
+
+  const cinza = new Float64Array(colunas * linhas);
+  for (let i = 0, j = 0; i < cinza.length; i++, j += 4)
+    cinza[i] = 0.299 * px[j] + 0.587 * px[j + 1] + 0.114 * px[j + 2];
+
+  if ($('autoc').checked) {
+    const h = new Int32Array(256);
+    for (const v of cinza) h[Math.max(0, Math.min(255, Math.round(v)))]++;
+    const corte = Math.floor(cinza.length * 0.01);
+    let lo = 0, hi = 255, a = 0;
+    for (let i = 0; i < 256; i++) { a += h[i]; if (a > corte) { lo = i; break; } }
+    a = 0;
+    for (let i = 255; i >= 0; i--) { a += h[i]; if (a > corte) { hi = i; break; } }
+    if (hi > lo) { const k = 255 / (hi - lo);
+      for (let i = 0; i < cinza.length; i++) cinza[i] = Math.max(0, Math.min(255, (cinza[i] - lo) * k)); }
+  }
+
+  const gama = +$('gama').value, inv = $('inverter').checked;
+  const out = [];
+  for (let i = 0; i < linhas; i++) {
+    const l = new Float64Array(colunas);
+    for (let j = 0; j < colunas; j++) {
+      let dd = 1 - cinza[i * colunas + j] / 255;
+      if (inv) dd = 1 - dd;
+      dd = Math.max(0, Math.min(1, dd));
+      l[j] = gama !== 1 ? Math.pow(dd, gama) : dd;
+    }
+    out.push(l);
+  }
+  return out;
+}
+
+/* ---------------- monta ---------------- */
+function calcular() {
+  if ($('forma').value === 'cupula') return calcularCupula();
+  const largura = +$('largura').value;
+  const moldura = +$('moldura').value;
+  const altura = (largura - 2 * moldura) / (imagem.naturalWidth / imagem.naturalHeight) + 2 * moldura;
+  const passo = +$('passo').value;
+  const op = {
+    largura, altura, moldura,
+    espMin: +$('espMin').value,
+    espMax: Math.max(+$('espMax').value, +$('espMin').value + 0.3),
+    arco: +$('arco').value,
+    passoMalha: passo,
+  };
+  const esc = amostrar(
+    Math.max(40, Math.min(1400, Math.round((largura - 2 * moldura) / passo))),
+    Math.max(40, Math.min(1400, Math.round((altura - 2 * moldura) / passo))),
+  );
+  const r = painelDeLuz(op, esc);
+  const pe = $('comPe').checked
+    ? peDeApoio({ espMax: op.espMax, folgaPe: 0.4, larguraPe: Math.min(80, largura * 0.5), paredePe: 3, alturaPe: 22 })
+    : null;
+  return { ...r, op, pe, escuridao: esc };
+}
+
+/** A foto dá a volta: o retângulo aberto é circunferência × altura. */
+function calcularCupula() {
+  const D = +$('diametro').value, altura = +$('alturaCup').value;
+  const banda = +$('banda').value;
+  const passo = +$('passo').value;
+  const op = {
+    diametro: D, altura, bandaBase: banda, bandaTopo: banda,
+    espMin: +$('espMin').value,
+    espMax: Math.max(+$('espMax').value, +$('espMin').value + 0.3),
+    passoMalha: passo,
+  };
+  const utilA = Math.max(1, altura - 2 * banda);
+  const esc = amostrar(
+    Math.max(60, Math.min(1400, Math.round((Math.PI * D) / passo))),
+    Math.max(40, Math.min(1200, Math.round(utilA / passo))),
+  );
+  const r = cupulaDeLuz(op, esc);
+  return { ...r, op, cupula: true, pe: null, escuridao: esc };
+}
+
+/* ---------------- prévia ---------------- */
+/**
+ * A prévia é sempre a foto plana, em retângulo — inclusive na cúpula. Já teve
+ * cilindro projetado e visor 3D aqui; os dois foram retirados em 07/08 a pedido
+ * do dono. O retângulo mostra a foto do jeito que ela é, sem interpretação.
+ */
+function desenhar(r) {
+  const cv = $('tela');
+  const esc = r.escuridao;
+  const linhas = esc.length, colunas = esc[0].length;
+  const escala = Math.min(1200 / colunas, 800 / linhas, 4);
+  const W = Math.max(1, Math.round(colunas * escala)), H = Math.max(1, Math.round(linhas * escala));
+  cv.width = W; cv.height = H;
+  const c = cv.getContext('2d');
+  const img = c.createImageData(W, H);
+  const acesa = $('modo').value === 'acesa';
+  const molduraPx = !r.cupula && r.op.moldura > 0;
+
+  for (let y = 0; y < H; y++) {
+    const sy = Math.min(linhas - 1, Math.floor(y / escala));
+    for (let x = 0; x < W; x++) {
+      const sx = Math.min(colunas - 1, Math.floor(x / escala));
+      const d = esc[sy][sx];
+      const i = (y * W + x) * 4;
+      let v;
+      if (acesa) {
+        // grosso barra a luz: o que sai é o inverso da espessura
+        const luz = Math.pow(1 - d, 1.1);
+        img.data[i] = 255 * luz;
+        img.data[i + 1] = 246 * luz;
+        img.data[i + 2] = 225 * luz;
+      } else {
+        // apagada é PLA branco: quase tudo igual, com relevo sutil
+        v = 214 - d * 26;
+        img.data[i] = v; img.data[i + 1] = v; img.data[i + 2] = v - 2;
+      }
+      img.data[i + 3] = 255;
+    }
+  }
+  c.putImageData(img, 0, 0);
+
+  if (molduraPx) {
+    const px = (r.op.moldura / r.op.largura) * W;
+    c.fillStyle = acesa ? '#151310' : '#c9c9c6';
+    c.fillRect(0, 0, W, px); c.fillRect(0, H - px, W, px);
+    c.fillRect(0, 0, px, H); c.fillRect(W - px, 0, px, H);
+  }
+}
+
+function mostrarDados(r) {
+  const n = (v, d = 2) => v.toFixed(d).replace('.', ',');
+  $('dTam').textContent = r.cupula
+    ? `ø${Math.round(r.op.diametro)} × ${Math.round(r.op.altura)} mm`
+    : `${Math.round(r.op.largura)} × ${Math.round(r.op.altura)} mm`;
+  $('dArq').textContent = `${(r.tris.length * 50 / 1e6).toFixed(0)} MB`;
+  $('dEsp').textContent = `${n(r.espessuraMin)} a ${n(r.espessuraMax)} mm`;
+  $('dMalha').textContent = `${r.nU} × ${r.nV}`;
+  const gPainel = r.volume * DENSIDADE;
+  $('dPeso').textContent = `~${Math.round(gPainel + (r.pe ? r.pe.volume * DENSIDADE : 0))} g`;
+  // Camada de 0,1 mm e parede cheia: na prática rende perto de 9 g por hora.
+  $('dTempo').textContent = `~${(gPainel / 9).toFixed(1)} h`;
+
+  const av = [];
+  if (r.espessuraMin < 0.6) av.push('Parte clara fina demais: abaixo de 0,6 mm a placa fica translúcida demais e frágil.');
+  if (r.espessuraMax - r.espessuraMin < 1.5) av.push('Pouca diferença entre claro e escuro: a foto vai sair lavada.');
+  if (!r.cupula && r.op.largura > 180 && r.op.arco === 0) av.push('Placa grande e reta costuma empenar. Vale curvar um pouco.');
+  if (r.cupula) {
+    av.push(`Na aba Base dos vasos, use diâmetro ${r.encaixeDiametro} mm e parede ${n(r.encaixeParede)} mm.`);
+  }
+  if (r.tris.length * 50 / 1e6 > 60) av.push('Arquivo acima de 60 MB: o fatiador vai ficar lento. Aumente a finura da malha.');
+  if (gPainel / 9 > 5) av.push(`Vai passar de ${(gPainel / 9).toFixed(0)} horas de impressão. Peça menor rende melhor por hora de máquina.`);
+  $('aviso').textContent = av.join('  ');
+}
+
+function aplicar(r) {
+  ultimo = r;
+  desenhar(r);
+  mostrarDados(r);
+  $('btPainel').disabled = false;
+  $('btPe').disabled = !r.pe;
+}
+
+let pendente = false;
+function agendar() {
+  if (!imagem || pendente) return;
+  pendente = true;
+  requestAnimationFrame(() => {
+    pendente = false;
+    let r;
+    try { r = calcular(); }
+    catch (e) {
+      if (e.message !== 'BLOQUEIO_FILE') throw e;
+      mostrarArea('solta');
+      $('solta').innerHTML = '<b>Abra pelo atalho, não por duplo clique</b>' +
+        '<div>O Chrome não deixa uma página aberta como arquivo ler a imagem.</div>';
+      return;
+    }
+    aplicar(r);
+  });
+}
+
+/* ---------------- confirmar e gerar ---------------- */
+async function gerarPeca() {
+  if (!fotoPendente) return;
+  imagem = fotoPendente; fotoPendente = null;
+  const barra = $('barra');
+  barra.classList.remove('correndo'); void barra.offsetWidth; barra.classList.add('correndo');
+  mostrarArea('montando');
+  const fim = Date.now() + 5000;
+  await espera(300);
+  let r;
+  try { r = calcular(); }
+  catch (e) {
+    if (e.message !== 'BLOQUEIO_FILE') throw e;
+    mostrarArea('solta');
+    $('solta').innerHTML = '<b>Abra pelo atalho, não por duplo clique</b>' +
+      '<div>O Chrome não deixa uma página aberta como arquivo ler a imagem.</div>';
+    return;
+  }
+  await espera(Math.max(0, fim - Date.now()));
+  aplicar(r);
+  mostrarArea(null);
+}
+function cancelarFoto() {
+  fotoPendente = null;
+  if (urlPendente) { URL.revokeObjectURL(urlPendente); urlPendente = null; }
+  mostrarArea(imagem ? null : 'solta');
+}
+$('btGerar').onclick = gerarPeca;
+$('btCancelar').onclick = cancelarFoto;
+$('tracos').innerHTML = Array.from({ length: 7 },
+  (_, i) => `<i style="animation-delay:${(i * 0.12).toFixed(2)}s"></i>`).join('');
+
+/* ---------------- baixar ---------------- */
+function baixar(dados, nome, tipo) {
+  const url = URL.createObjectURL(new Blob([dados], { type: tipo }));
+  const a = document.createElement('a');
+  a.href = url; a.download = nome; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+async function baixarPeca(qual, botao) {
+  const mm = Math.round(ultimo.op.largura);
+  const sugestao = qual === 'painel' ? `${nomeBase}-luz-${mm}mm.stl` : `${nomeBase}-pe.stl`;
+  let destino = null;
+  if (window.showSaveFilePicker) {
+    try {
+      destino = await window.showSaveFilePicker({
+        suggestedName: sugestao,
+        types: [{ description: 'STL', accept: { 'model/stl': ['.stl'] } }],
+      });
+    } catch (e) { if (e.name === 'AbortError') return; destino = null; }
+  }
+  let nome = sugestao;
+  if (!destino) {
+    const resp = prompt('Nome do arquivo:', sugestao);
+    if (resp === null) return;
+    nome = resp.trim() || sugestao;
+    if (!nome.toLowerCase().endsWith('.stl')) nome += '.stl';
+  }
+  const antes = botao.textContent;
+  botao.textContent = 'Montando…'; botao.disabled = true;
+  await espera(20);
+  try {
+    const tris = qual === 'painel' ? ultimo.tris : ultimo.pe.tris;
+    const dados = escreverStl(tris, 'luminus 3d');
+    if (destino) {
+      const f = await destino.createWritable();
+      await f.write(new Blob([dados], { type: 'model/stl' }));
+      await f.close();
+    } else baixar(dados, nome, 'model/stl');
+  } finally { botao.textContent = antes; botao.disabled = false; }
+}
+$('btPainel').onclick = () => baixarPeca('painel', $('btPainel'));
+$('btPe').onclick = () => baixarPeca('pe', $('btPe'));
+
+/* ---------------- controles ---------------- */
+const vg = (v, d = 1) => v.toFixed(d).replace('.', ',');
+/** Mostra só os controles do formato escolhido. */
+function porForma() {
+  const f = $('forma').value;
+  for (const el of document.querySelectorAll('[data-de]')) el.hidden = el.dataset.de !== f;
+  // Cúpula não usa pé: ela assenta na base do módulo de vasos.
+  $('comPe').closest('.caixa').hidden = f === 'cupula';
+  if (f === 'cupula') $('comPe').checked = false;
+}
+
+function rotulos() {
+  $('vGama').textContent = vg(+$('gama').value, 2);
+  $('vMin').textContent = vg(+$('espMin').value, 2) + ' mm';
+  $('vMax').textContent = vg(+$('espMax').value, 2) + ' mm';
+  $('vPasso').textContent = vg(+$('passo').value, 2) + ' mm';
+  const a = +$('arco').value;
+  $('vArco').textContent = a === 0 ? 'reta' : Math.round(a * 57) + '°';
+  const m = +$('moldura').value;
+  $('vMoldura').textContent = m === 0 ? 'sem moldura' : vg(m) + ' mm';
+  $('vBanda').textContent = $('banda').value + ' mm';
+}
+document.querySelectorAll('aside input, aside select').forEach((el) =>
+  el.addEventListener('input', () => {
+    if (el.id === 'forma') porForma();
+    rotulos(); agendar();
+  }));
+
+window.__luz = { carregarArquivo, gerarPeca, cancelarFoto, calcular, aplicar, mostrarArea, porForma };
+porForma();
+rotulos();
+document.body.dataset.pronto = '1';
+</script>
+</body>
+</html>

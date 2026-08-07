@@ -1,0 +1,903 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Luminus 3D</title>
+<style>
+  :root {
+    --bg: #14161a; --painel: #1c1f25; --linha: #2b3038;
+    --texto: #e7eaef; --fraco: #8b93a1; --destaque: #d9a441;
+  }
+  * { box-sizing: border-box; }
+  /* Regra de autor vence o display:none que o navegador dá ao [hidden].
+     Sem isto, esconder um label ou fieldset simplesmente não funciona. */
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--texto); display: flex;
+    height: 100vh; overflow: hidden;
+  }
+
+  /* A coluna é uma pilha de três partes: topo fixo, miolo que rola e rodapé
+     fixo. O rodapé guarda a ação principal (baixar), que antes ficava no fim de
+     tudo e exigia rolar pra alcançar. */
+  aside {
+    width: 300px; flex: 0 0 300px; background: var(--painel);
+    border-right: 1px solid var(--linha); max-height: 100vh;
+    display: flex; flex-direction: column;
+  }
+  aside > header { padding: 16px 18px 12px; border-bottom: 1px solid var(--linha); }
+  aside > .corpo { flex: 1; overflow-y: auto; padding: 0 18px 16px; }
+  aside > footer { padding: 12px 18px 14px; border-top: 1px solid var(--linha); }
+
+  h1 { font-size: 17px; margin: 0 0 2px; }
+  .sub { color: var(--fraco); font-size: 12px; }
+  .sub a { color: var(--destaque); }
+
+  /* Cada etapa do fluxo é uma seção. O número dá a ordem de leitura. */
+  .etapa, details {
+    border-top: 1px solid var(--linha); margin-top: 12px; padding-top: 11px;
+  }
+  .corpo > .etapa:first-child { border-top: 0; margin-top: 0; padding-top: 14px; }
+  .tit, summary {
+    color: var(--fraco); font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .08em; margin: 0 0 11px;
+  }
+  .tit b { color: var(--destaque); margin-right: 7px; }
+  #vLargura { display: none; }   /* o número já está dentro do campo */
+
+  /* Avançado fica recolhido: quem está começando não precisa ver bico e folga. */
+  summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: '+'; font-size: 14px; line-height: 1; opacity: .7; }
+  details[open] summary::after { content: '\2212'; }
+  details:not([open]) summary { margin-bottom: 0; }
+
+  .dica { margin: 6px 0 0; font-size: 11px; color: var(--fraco); line-height: 1.45; }
+  .lado { display: flex; gap: 8px; }
+  .lado button { margin-top: 0; }
+
+  label { display: block; margin-bottom: 9px; }
+  .rot { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .rot span:last-child { color: var(--destaque); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--destaque); }
+  select, input[type=number], input[type=text] {
+    width: 100%; padding: 6px 8px; background: #12141a; color: var(--texto);
+    border: 1px solid var(--linha); border-radius: 6px; font-size: 13px;
+  }
+  .caixa { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+  .caixa input { accent-color: var(--destaque); }
+
+  button {
+    width: 100%; padding: 10px; border: 0; border-radius: 8px; font-size: 14px;
+    font-weight: 600; cursor: pointer; margin-top: 8px;
+    background: var(--destaque); color: #1a1206;
+  }
+  button.menor { padding: 8px; font-size: 13px; }
+  button.vazio { background: transparent; border: 1px solid var(--linha); color: var(--texto); font-weight: 500; }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+
+  main { flex: 1; display: flex; flex-direction: column; padding: 18px; gap: 14px;
+         min-width: 0; min-height: 0; }
+
+  #solta {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border: 2px dashed var(--linha); border-radius: 14px; color: var(--fraco); text-align: center;
+    padding: 30px; gap: 6px;
+  }
+  #solta[hidden] { display: none; }
+  #solta.sobre { border-color: var(--destaque); background: #1b1a14; }
+  #solta b { color: var(--texto); font-size: 16px; }
+  #solta kbd { background: #262b33; border: 1px solid var(--linha); border-radius: 4px; padding: 1px 6px; font-size: 12px; }
+
+  /* Centraliza por margin:auto, e não por align-items: com item maior que a
+     área, o centramento do flex corta o topo e ele fica inalcançável na rolagem. */
+  #palco { flex: 1; display: flex; overflow: auto; min-height: 0; }
+  #palco[hidden] { display: none; }
+  /* SEM max-height: com a largura definida pelo zoom, limitar a altura espremia
+     a imagem (a largura continuava no valor pedido). Altura automática mantém a
+     proporção sempre; se a peça passar da área, o quadro rola. */
+  #tela { background: #fff; border-radius: 4px; max-width: 100%; height: auto;
+          margin: auto; box-shadow: 0 4px 30px #0008; }
+
+  /* Confirmar a foto e montar: dois estados que ocupam a mesma área da prévia */
+  #confirmar, #montando {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 14px; text-align: center;
+    border: 2px dashed var(--linha); border-radius: 14px; padding: 24px;
+  }
+  #confirmar[hidden], #montando[hidden] { display: none !important; }
+  #miniatura {
+    max-width: min(420px, 60%); max-height: 46vh; border-radius: 10px;
+    box-shadow: 0 6px 30px #0009; object-fit: contain;
+  }
+  #confirmar p, #montando p { margin: 0; color: var(--fraco); font-size: 13px; }
+  #confirmar .lado { width: 260px; }
+
+  /* Linhas que vão se formando: o mesmo gesto que a peça faz. */
+  .tracos { display: flex; flex-direction: column; gap: 5px; width: 260px; }
+  .tracos i {
+    display: block; height: 4px; border-radius: 2px; background: var(--destaque);
+    transform-origin: left center; animation: cresce 1.6s ease-in-out infinite;
+  }
+  @keyframes cresce {
+    0%, 100% { transform: scaleX(.12); opacity: .35; }
+    50%      { transform: scaleX(1);   opacity: 1; }
+  }
+  .barra { width: 260px; height: 3px; background: var(--linha); border-radius: 2px; overflow: hidden; }
+  .barra i { display: block; height: 100%; width: 0; background: var(--destaque); }
+  .barra.correndo i { animation: enche 5s linear forwards; }
+  @keyframes enche { to { width: 100%; } }
+
+  /* Barra de números: fica sempre à vista, colada no rodapé da área central. */
+  #dados { display: flex; gap: 22px; flex-wrap: wrap; border-top: 1px solid var(--linha);
+           padding-top: 12px; font-size: 12px; color: var(--fraco); flex: 0 0 auto; }
+  #dados b { display: block; color: var(--texto); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  #aviso { color: var(--destaque); font-size: 12px; min-height: 18px; }
+  .acoes { display: flex; gap: 10px; }
+</style>
+</head>
+<body>
+
+<aside>
+  <header>
+    <h1>Luminus 3D</h1>
+    <div class="sub">Foto vira quadro pra imprimir.
+      <a href="vaso.html">Vasos</a> · <a href="luz.html">Foto na Luz</a></div>
+  </header>
+
+  <div class="corpo">
+
+    <div class="etapa">
+      <p class="tit"><b>1</b>Foto</p>
+      <button class="vazio" id="btEscolher">Escolher imagem…</button>
+      <input type="file" id="arquivo" accept="image/*" hidden>
+      <div class="caixa" style="margin-top:12px"><input type="checkbox" id="autoc" checked><span>Ajustar contraste sozinho</span></div>
+      <div class="caixa"><input type="checkbox" id="inverter"><span>Inverter (negativo)</span></div>
+      <label style="margin-bottom:0">
+        <div class="rot"><span>Peso do desenho</span><span id="vGama">1,00</span></div>
+        <input type="range" id="gama" min="0.4" max="2" step="0.05" value="1">
+      </label>
+    </div>
+
+    <div class="etapa">
+      <p class="tit"><b>2</b>Tamanho</p>
+      <label style="margin-bottom:0">
+        <div class="rot"><span>Largura da peça (mm)</span><span id="vLargura">180</span></div>
+        <input type="number" id="largura" min="40" max="400" step="1" value="180">
+        <p class="dica">Defina o tamanho final aqui — redimensionar no fatiador abre buracos na linha.</p>
+      </label>
+    </div>
+
+    <div class="etapa">
+      <p class="tit"><b>3</b>Linhas</p>
+      <label>
+        <div class="rot"><span>Direção</span></div>
+        <select id="direcao">
+          <option value="horizontal">Deitadas</option>
+          <option value="vertical">Em pé</option>
+        </select>
+      </label>
+      <label style="margin-bottom:0">
+        <div class="rot"><span id="rotPasso">Distância entre linhas</span><span id="vPasso">2,0 mm</span></div>
+        <input type="range" id="passo" min="0.8" max="6" step="0.1" value="2">
+      </label>
+    </div>
+
+    <div class="etapa">
+      <p class="tit"><b>4</b>Moldura</p>
+      <label>
+        <div class="rot"><span>Largura da moldura</span><span id="vMoldura">5 mm</span></div>
+        <input type="range" id="moldura" min="0" max="15" step="0.5" value="5">
+      </label>
+      <div class="caixa"><input type="checkbox" id="aba"><span>Furo pra pendurar</span></div>
+      <label data-de="aba" style="margin-bottom:0">
+        <div class="rot"><span>Diâmetro do furo</span><span id="vFuro">5 mm</span></div>
+        <input type="range" id="furo" min="3" max="10" step="0.5" value="5">
+      </label>
+    </div>
+
+    <details>
+      <summary>Ajustes de impressão</summary>
+      <label>
+        <div class="rot"><span>Bico</span></div>
+        <select id="bico">
+          <option value="0.2">0,2 mm</option>
+          <option value="0.4" selected>0,4 mm</option>
+          <option value="0.6">0,6 mm</option>
+          <option value="0.8">0,8 mm</option>
+        </select>
+      </label>
+      <label>
+        <div class="rot"><span>Linha mais fina</span><span id="vMin">0,45 mm</span></div>
+        <input type="range" id="espMin" min="0.4" max="1.5" step="0.01" value="0.45">
+      </label>
+      <label>
+        <div class="rot"><span>Folga entre linhas</span><span id="vFolga">0,40 mm</span></div>
+        <input type="range" id="folgaMin" min="0.3" max="2" step="0.05" value="0.4">
+      </label>
+      <label>
+        <div class="rot"><span>Altura do relevo</span><span id="vProf">2,5 mm</span></div>
+        <input type="range" id="prof" min="0.8" max="6" step="0.1" value="2.5">
+      </label>
+      <label style="margin-bottom:0">
+        <div class="rot"><span>Fundo sólido</span><span id="vPlaca">sem fundo</span></div>
+        <input type="range" id="placa" min="0" max="1.5" step="0.1" value="0">
+      </label>
+    </details>
+
+    <details>
+      <summary>Projeto salvo</summary>
+      <label>
+        <div class="rot"><span>Nome</span></div>
+        <input type="text" id="nomeProjeto" placeholder="Ex.: Quadro do Enzo" maxlength="60">
+      </label>
+      <button class="vazio menor" id="btSalvar">Salvar projeto</button>
+      <label style="margin-top:12px">
+        <div class="rot"><span>Salvos</span></div>
+        <select id="listaProjetos"><option value="">—</option></select>
+      </label>
+      <div class="lado">
+        <button class="vazio menor" id="btAbrir">Abrir</button>
+        <button class="vazio menor" id="btApagar">Apagar</button>
+      </div>
+    </details>
+
+  </div>
+
+  <footer>
+    <label style="margin-bottom:9px">
+      <div class="rot"><span>Zoom</span><span id="vZoom">50%</span></div>
+      <input type="range" id="zoom" min="18" max="100" step="1" value="100">
+    </label>
+    <div class="lado">
+      <button id="btStl" disabled style="flex:2">Baixar STL</button>
+      <button class="vazio" id="btSvg" disabled style="flex:1">SVG</button>
+    </div>
+    <p class="dica" style="color:var(--destaque);margin-top:7px">Fatie em 100%, sem redimensionar.</p>
+  </footer>
+</aside>
+
+<main>
+  <div id="solta">
+    <b>Cole a imagem aqui</b>
+    <div><kbd>⌘</kbd> + <kbd>V</kbd>, ou arraste o arquivo pra cá</div>
+  </div>
+
+  <div id="confirmar" hidden>
+    <img id="miniatura" alt="Foto escolhida">
+    <p>É esta foto?</p>
+    <div class="lado">
+      <button id="btGerar" style="flex:2">Gerar</button>
+      <button class="vazio" id="btCancelar" style="flex:1">Cancelar</button>
+    </div>
+  </div>
+
+  <div id="montando" hidden>
+    <div class="tracos" id="tracos"></div>
+    <p>Montando as linhas…</p>
+    <div class="barra" id="barra"><i></i></div>
+  </div>
+
+  <div id="palco" hidden><canvas id="tela"></canvas></div>
+
+  <div id="dados">
+    <div>Peça<b id="dTam">—</b></div>
+    <div id="boxFormas">Desenho<b id="dFormas">—</b></div>
+    <div>Contraste<b id="dContraste">—</b></div>
+    <div>Linha mais fina<b id="dFina">—</b></div>
+    <div>Folga<b id="dFolga">—</b></div>
+    <div>Resistência<b id="dForca">—</b></div>
+    <div>Filamento<b id="dPeso">—</b></div>
+  </div>
+  <div id="aviso"></div>
+</main>
+
+<script type="module">
+import { montarQuadro, svgDoQuadro, gradeNecessaria, rigidezRelativa } from './plano.js';
+import { escreverStl } from './geometria.js';
+
+const DENSIDADE_PLA = 1.24;
+const $ = (id) => document.getElementById(id);
+
+let imagem = null;
+let nomeBase = 'luminus3d';
+let ultimo = null;
+
+/* ================================================================
+   1. Entrada da imagem: botão, arrastar e colar
+   ================================================================ */
+
+let fotoPendente = null;      // esperando o usuário confirmar
+let primeiraPeca = true;      // a primeira abre com zoom pela metade
+let urlPendente = null;
+
+/** Mostra só um dos estados da área central. */
+function mostrarArea(qual) {
+  for (const id of ['solta', 'confirmar', 'montando', 'palco']) {
+    $(id).hidden = id !== qual;
+  }
+}
+
+function carregarArquivo(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  nomeBase = (file.name || 'luminus3d').replace(/\.[^.]+$/, '') || 'luminus3d';
+  if (urlPendente) URL.revokeObjectURL(urlPendente);
+  urlPendente = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    fotoPendente = img;
+    $('miniatura').src = urlPendente;
+    mostrarArea('confirmar');
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(urlPendente); urlPendente = null;
+    alert('Não consegui abrir essa imagem.');
+  };
+  img.src = urlPendente;
+}
+
+function cancelarFoto() {
+  fotoPendente = null;
+  if (urlPendente) { URL.revokeObjectURL(urlPendente); urlPendente = null; }
+  // Volta pro que estava antes: a peça pronta, se já havia uma.
+  mostrarArea(imagem ? 'palco' : 'solta');
+}
+
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Confirma a foto e monta a peça. A animação corre por 5 segundos; o cálculo
+ * entra no meio, depois que a tela já pintou, senão ele travaria a animação
+ * logo no começo. Se o cálculo passar dos 5 s, espera ele.
+ */
+async function gerarPeca() {
+  if (!fotoPendente) return;
+  imagem = fotoPendente;
+  fotoPendente = null;
+
+  const barra = $('barra');
+  barra.classList.remove('correndo');
+  void barra.offsetWidth;                 // reinicia a animação da barra
+  barra.classList.add('correndo');
+  mostrarArea('montando');
+
+  const fim = Date.now() + 5000;
+  await espera(300);                      // deixa a animação aparecer
+  let r = null;
+  try {
+    r = calcular();
+  } catch (e) {
+    if (e.message !== 'BLOQUEIO_FILE') throw e;
+    mostrarArea('solta');
+    solta.innerHTML =
+      '<b>Abra pelo atalho, não por duplo clique</b>' +
+      '<div>O Chrome não deixa uma página aberta como arquivo ler a imagem.<br>' +
+      'Use o atalho <b>Abrir Luminus 3D.command</b> na pasta luminus3d.</div>';
+    return;
+  }
+  await espera(Math.max(0, fim - Date.now()));
+
+  // Na primeira peça, abre com metade do zoom: assim o usuário vê o quadro
+  // inteiro de cara, que é como o cliente vai olhar na parede. Depois disso a
+  // escolha é dele e não mexemos mais.
+  if (primeiraPeca) {
+    primeiraPeca = false;
+    $('zoom').value = '50';
+    rotulos();
+  }
+  aplicar(r);
+  mostrarArea('palco');
+  $('btStl').disabled = $('btSvg').disabled = false;
+}
+
+$('btGerar').onclick = gerarPeca;
+$('btCancelar').onclick = cancelarFoto;
+
+// as barrinhas da animação
+$('tracos').innerHTML = Array.from({ length: 7 },
+  (_, i) => `<i style="animation-delay:${(i * 0.12).toFixed(2)}s"></i>`).join('');
+
+$('btEscolher').onclick = () => $('arquivo').click();
+$('arquivo').onchange = (e) => carregarArquivo(e.target.files[0]);
+document.addEventListener('paste', (e) => {
+  for (const f of e.clipboardData.files) { carregarArquivo(f); return; }
+});
+
+const solta = $('solta');
+['dragenter', 'dragover'].forEach((ev) =>
+  document.addEventListener(ev, (e) => { e.preventDefault(); solta.classList.add('sobre'); }));
+['dragleave', 'drop'].forEach((ev) =>
+  document.addEventListener(ev, (e) => { e.preventDefault(); solta.classList.remove('sobre'); }));
+document.addEventListener('drop', (e) => carregarArquivo(e.dataTransfer.files[0]));
+
+/* ================================================================
+   2. Amostragem: foto -> matriz de escuridão 0..1
+   ================================================================ */
+
+/** Reduz de metade em metade: um passo só de redução grande serrilha a foto. */
+function reduzir(sx, sy, sw, sh, largFinal, altFinal) {
+  let cv = document.createElement('canvas');
+  cv.width = sw; cv.height = sh;
+  cv.getContext('2d').drawImage(imagem, sx, sy, sw, sh, 0, 0, sw, sh);
+
+  while (cv.width > largFinal * 2 && cv.height > altFinal * 2) {
+    const prox = document.createElement('canvas');
+    prox.width = Math.max(largFinal, cv.width >> 1);
+    prox.height = Math.max(altFinal, cv.height >> 1);
+    const c = prox.getContext('2d');
+    c.imageSmoothingQuality = 'high';
+    c.drawImage(cv, 0, 0, prox.width, prox.height);
+    cv = prox;
+  }
+
+  const fim = document.createElement('canvas');
+  fim.width = largFinal; fim.height = altFinal;
+  const c = fim.getContext('2d');
+  c.imageSmoothingQuality = 'high';
+  c.fillStyle = '#fff'; c.fillRect(0, 0, largFinal, altFinal);
+  c.drawImage(cv, 0, 0, largFinal, altFinal);
+  try {
+    return c.getImageData(0, 0, largFinal, altFinal);
+  } catch {
+    // Página aberta por duplo clique (file://): o Chrome não deixa ler pixels.
+    throw new Error('BLOQUEIO_FILE');
+  }
+}
+
+function amostrar(colunas, linhas, transpor, aspectoAlvo, o) {
+  const lp = imagem.naturalWidth, ap = imagem.naturalHeight;
+  let sx = 0, sy = 0, sw = lp, sh = ap;
+  const aspectoImg = lp / ap;
+  if (Math.abs(aspectoImg - aspectoAlvo) > 1e-3) {
+    if (aspectoImg > aspectoAlvo) { sw = Math.round(ap * aspectoAlvo); sx = (lp - sw) >> 1; }
+    else { sh = Math.round(lp / aspectoAlvo); sy = (ap - sh) >> 1; }
+  }
+
+  // Nas linhas em pé, a "linha" corre na vertical: amostra transposto.
+  const larg = transpor ? linhas : colunas;
+  const alt = transpor ? colunas : linhas;
+  const px = reduzir(sx, sy, sw, sh, larg, alt).data;
+
+  const cinza = new Float64Array(larg * alt);
+  for (let i = 0, j = 0; i < cinza.length; i++, j += 4) {
+    cinza[i] = 0.299 * px[j] + 0.587 * px[j + 1] + 0.114 * px[j + 2];
+  }
+
+  if (o.autoc) {
+    const hist = new Int32Array(256);
+    for (const v of cinza) hist[Math.max(0, Math.min(255, Math.round(v)))]++;
+    const corte = Math.floor(cinza.length * 0.01);
+    let baixo = 0, alto = 255, acc = 0;
+    for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc > corte) { baixo = i; break; } }
+    acc = 0;
+    for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc > corte) { alto = i; break; } }
+    if (alto > baixo) {
+      const k = 255 / (alto - baixo);
+      for (let i = 0; i < cinza.length; i++) {
+        cinza[i] = Math.max(0, Math.min(255, (cinza[i] - baixo) * k));
+      }
+    }
+  }
+
+  const out = [];
+  for (let i = 0; i < linhas; i++) {
+    const l = new Float64Array(colunas);
+    for (let j = 0; j < colunas; j++) {
+      const v = transpor ? cinza[j * larg + i] : cinza[i * larg + j];
+      let d = 1 - v / 255;
+      if (o.inverter) d = 1 - d;
+      d = Math.max(0, Math.min(1, d));
+      l[j] = o.gama !== 1 ? Math.pow(d, o.gama) : d;
+    }
+    out.push(l);
+  }
+  return out;
+}
+
+/* ================================================================
+   3. Calcula a peça
+   ================================================================ */
+
+function lerControles() {
+  const estilo = 'linhas';                 // o app só oferece linhas
+  const aspectoFoto = imagem.naturalWidth / imagem.naturalHeight;
+  const largura = +$('largura').value;
+  const moldura = +$('moldura').value;
+  return {
+    estilo,
+    largura,
+    altura: (largura - 2 * moldura) / aspectoFoto + 2 * moldura,
+    moldura,
+    passo: +$('passo').value,
+    espMin: +$('espMin').value,
+    espMax: 0,
+    bico: +$('bico').value,
+    folgaMin: +$('folgaMin').value,
+    profundidade: +$('prof').value,
+    profMoldura: 0,
+    placa: +$('placa').value,
+    direcao: $('direcao').value,
+    aba: $('aba').checked,
+    furo: +$('furo').value,
+    gama: +$('gama').value,
+    inverter: $('inverter').checked,
+    autoc: $('autoc').checked,
+  };
+}
+
+function calcular() {
+  const o = lerControles();
+  const g = gradeNecessaria(o);
+  const aspectoAlvo = (o.largura - 2 * o.moldura) / (o.altura - 2 * o.moldura);
+  const transpor = o.estilo === 'linhas' && o.direcao === 'vertical';
+  const esc = amostrar(g.colunas, g.linhas, transpor, aspectoAlvo, o);
+  return { ...montarQuadro(o, esc), op: o, grade: g };
+}
+
+/* ================================================================
+   4. Prévia
+   ================================================================ */
+
+function desenhar(r) {
+  const cv = $('tela');
+  const escala = Math.min(1600 / r.largura, 1600 / r.alturaTotal);
+  const ss = 3;                                  // desenha em 3x e reduz depois
+  const W = Math.round(r.largura * escala), H = Math.round(r.alturaTotal * escala);
+
+  const off = document.createElement('canvas');
+  off.width = W * ss; off.height = H * ss;
+  const c = off.getContext('2d');
+  c.fillStyle = '#fff'; c.fillRect(0, 0, off.width, off.height);
+  c.scale(escala * ss, escala * ss);
+
+  const o = r.op;
+  if (r.placa > 0) {
+    const rec = Math.max(o.moldura - 0.5, 0);
+    c.fillStyle = '#ececec';
+    c.fillRect(rec, r.oy + rec, r.largura - 2 * rec, o.altura - 2 * rec);
+  }
+
+  c.fillStyle = '#000';
+  if (o.moldura > 0) {
+    c.beginPath();
+    c.rect(0, r.oy, r.largura, o.altura);
+    c.rect(o.moldura, r.oy + o.moldura, r.largura - 2 * o.moldura, o.altura - 2 * o.moldura);
+    c.fill('evenodd');
+  }
+  if (r.aba) {
+    c.beginPath();
+    c.arc(r.aba.cx, r.aba.cy, r.aba.rExt, 0, Math.PI * 2);
+    c.arc(r.aba.cx, r.aba.cy, r.aba.rFuro, 0, Math.PI * 2, true);
+    c.fill('evenodd');
+  }
+  for (const [topo, base] of r.formas.fitas) {
+    c.beginPath();
+    c.moveTo(topo[0][0], topo[0][1]);
+    for (let j = 1; j < topo.length; j++) c.lineTo(topo[j][0], topo[j][1]);
+    for (let j = base.length - 1; j >= 0; j--) c.lineTo(base[j][0], base[j][1]);
+    c.closePath();
+    c.fill();
+  }
+  for (const [x, y, raio] of r.formas.pontos) {
+    c.beginPath();
+    c.arc(x, y, raio, 0, Math.PI * 2);
+    c.fill();
+  }
+
+  cv.width = W; cv.height = H;
+  const cc = cv.getContext('2d');
+  cc.imageSmoothingQuality = 'high';
+  cc.drawImage(off, 0, 0, W, H);
+  cv.style.width = $('zoom').value + '%';
+}
+
+function mostrarDados(r) {
+  const n = (v, d = 2) => v.toFixed(d).replace('.', ',');
+  const o = r.op;
+  $('dTam').textContent = `${Math.round(r.largura)} × ${Math.round(r.alturaTotal)} mm`;
+  $('dPeso').textContent = `~${Math.round(r.volume * DENSIDADE_PLA)} g`;
+
+  const av = [];
+  $('dFormas').textContent = `${r.info.qtd} linhas`;
+  const cobMin = (r.info.espMin / r.info.passo) * 100;
+  const cobMax = (r.info.espMax / r.info.passo) * 100;
+  $('dContraste').textContent = `${Math.round(cobMin)}% a ${Math.round(cobMax)}%`;
+  $('dFina').textContent = `${n(r.info.maisFina)} mm`;
+  const forca = rigidezRelativa(r.info.maisFina, o.profundidade, r.info.vaoLivre);
+  $('dForca').textContent = `${forca.toFixed(0)}×`;
+  $('dFolga').textContent = `${n(r.info.folgaReal)} mm`;
+
+  if (r.info.passoInsuficiente) {
+    av.push(`Distância entre linhas pequena demais pro bico de ${n(o.bico)} mm: ` +
+            'não sobra faixa nenhuma. Aumente a distância ou a largura da peça.');
+  } else if (r.info.maisFina < r.info.piso - 1e-9) {
+    av.push('ERRO INTERNO: linha abaixo do mínimo do bico — não imprima, me avise.');
+  }
+  if (r.info.folgaReal < o.bico - 1e-6) {
+    av.push(`Folga de só ${n(r.info.folgaReal)} mm: as linhas vão fundir na impressão. ` +
+            'Aumente a distância entre linhas.');
+  }
+  if (r.placa === 0 && forca < 6) {
+    av.push(`Linha frágil: ${forca.toFixed(1)}× a resistência da peça que quebrou ao descolar. ` +
+            'Sem ligação entre linhas, o único reforço é a altura do relevo — e ela rende ao cubo.');
+  }
+  if (cobMin > 35) av.push('Pouca faixa de contraste: aumente a distância entre linhas ou a largura.');
+  if (o.moldura === 0 && r.placa === 0) av.push('Sem moldura e sem fundo as linhas ficam soltas e a peça desmonta.');
+  if (r.placa > 0) av.push('Com fundo sólido a luz não passa — serve pra quadro, não pra luminária.');
+  $('aviso').textContent = av.join('  ');
+}
+
+/** Guarda o resultado e joga na tela. Separado do recalcular pra dar pra
+ *  exercitar sem depender do requestAnimationFrame. */
+function aplicar(r) {
+  ultimo = r;
+  desenhar(r);
+  mostrarDados(r);
+}
+
+let pendente = false;
+function recalcular() {
+  if (!imagem || pendente) return;
+  pendente = true;
+  requestAnimationFrame(() => {
+    pendente = false;
+    let r;
+    try {
+      r = calcular();
+    } catch (e) {
+      if (e.message !== 'BLOQUEIO_FILE') throw e;
+      $('btStl').disabled = $('btSvg').disabled = true;
+      mostrarArea('solta');
+      solta.innerHTML =
+        '<b>Abra pelo atalho, não por duplo clique</b>' +
+        '<div>O Chrome não deixa uma página aberta como arquivo ler a imagem.<br>' +
+        'Use o atalho <b>Abrir Luminus 3D</b> na pasta luminus3d.</div>';
+      return;
+    }
+    aplicar(r);
+  });
+}
+
+/* ================================================================
+   5. Baixar
+   ================================================================ */
+
+function baixar(dados, nome, tipo) {
+  const url = URL.createObjectURL(new Blob([dados], { type: tipo }));
+  const a = document.createElement('a');
+  a.href = url; a.download = nome; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/**
+ * Pergunta o nome (e o lugar) antes de gerar o arquivo.
+ *
+ * A janela nativa de "salvar como" só abre se for pedida DENTRO do clique — por
+ * isso ela vem antes da geração, que é pesada. Navegador sem suporte cai num
+ * prompt simples e no download comum.
+ */
+async function baixarPerguntando(sugestao, tipo, ext, gerar, botao) {
+  let destino = null;
+  if (window.showSaveFilePicker) {
+    try {
+      destino = await window.showSaveFilePicker({
+        suggestedName: sugestao,
+        types: [{ description: ext.toUpperCase(), accept: { [tipo]: ['.' + ext] } }],
+      });
+    } catch (e) {
+      if (e.name === 'AbortError') return;        // desistiu: não gera nada
+      destino = null;                             // sem suporte de verdade
+    }
+  }
+
+  let nome = sugestao;
+  if (!destino) {
+    const resposta = prompt('Nome do arquivo:', sugestao);
+    if (resposta === null) return;                // desistiu
+    nome = resposta.trim() || sugestao;
+    if (!nome.toLowerCase().endsWith('.' + ext)) nome += '.' + ext;
+  }
+
+  const antes = botao.textContent;
+  botao.textContent = 'Montando…';
+  botao.disabled = true;
+  // deixa a tela pintar o "Montando…" antes de travar no cálculo
+  await new Promise((r) => setTimeout(r, 20));
+  try {
+    const dados = gerar();
+    if (destino) {
+      const fluxo = await destino.createWritable();
+      await fluxo.write(new Blob([dados], { type: tipo }));
+      await fluxo.close();
+    } else {
+      baixar(dados, nome, tipo);
+    }
+  } finally {
+    botao.textContent = antes;
+    botao.disabled = false;
+  }
+}
+
+const sugestaoNome = (ext) =>
+  `${nomeBase}-luminus3d-${Math.round(ultimo.largura)}mm.${ext}`;
+
+$('btStl').onclick = () =>
+  baixarPerguntando(sugestaoNome('stl'), 'model/stl', 'stl',
+    () => escreverStl(ultimo.tris, 'luminus 3d'), $('btStl'));
+
+$('btSvg').onclick = () =>
+  baixarPerguntando(sugestaoNome('svg'), 'image/svg+xml', 'svg',
+    () => svgDoQuadro(ultimo, ultimo.op), $('btSvg'));
+
+/* ================================================================
+   6. Controles
+   ================================================================ */
+
+const vg = (v, d = 1) => v.toFixed(d).replace('.', ',');
+
+/**
+ * A linha nunca pode afinar abaixo do bico, senão o fatiador pula o trecho e ela
+ * sai partida. Os controles acompanham o bico escolhido: o mínimo da linha vira
+ * o piso, e a distância entre linhas precisa de espaço pra variação existir.
+ */
+function porBico() {
+  const bico = +$('bico').value;
+  const piso = bico;   // uma passada: o mínimo que o bico deposita
+  const eMin = $('espMin');
+  eMin.min = String(piso);
+  if (+eMin.value < piso) eMin.value = String(piso);
+  // o passo precisa ser bem maior que o piso, senão a linha mais fina já ocupa
+  // quase toda a faixa e não sobra contraste nenhum
+  const passoMin = +(bico * 2).toFixed(1);
+  const passo = $('passo');
+  passo.min = String(passoMin);
+  if (+passo.value < passoMin) passo.value = String(passoMin);
+  document.querySelectorAll('[data-de]').forEach((el) => {
+    el.hidden = el.dataset.de === 'aba' ? !$('aba').checked : false;
+  });
+}
+
+function rotulos() {
+  $('vLargura').textContent = $('largura').value;
+  $('vPasso').textContent = vg(+$('passo').value) + ' mm';
+  $('vMin').textContent = vg(+$('espMin').value, 2) + ' mm';
+  $('vProf').textContent = vg(+$('prof').value) + ' mm';
+  $('vGama').textContent = vg(+$('gama').value, 2);
+  $('vMoldura').textContent = vg(+$('moldura').value) + ' mm';
+  const pl = +$('placa').value;
+  $('vPlaca').textContent = pl === 0 ? 'sem fundo' : vg(pl) + ' mm';
+  $('vFuro').textContent = vg(+$('furo').value) + ' mm';
+  $('vFolga').textContent = vg(+$('folgaMin').value, 2) + ' mm';
+  $('vZoom').textContent = $('zoom').value + '%';
+}
+
+document.querySelectorAll('aside input, aside select').forEach((el) => {
+  el.addEventListener('input', () => {
+    if (el.id === 'bico' || el.id === 'aba') porBico();
+    rotulos();
+    if (el.id === 'zoom') $('tela').style.width = $('zoom').value + '%';
+    else recalcular();
+  });
+});
+
+/* ================================================================
+   7. Projetos salvos (ficam neste navegador)
+   ================================================================ */
+
+const CHAVE = 'luminus3d.projetos';
+// Controles que definem a peça. Ficam de fora o zoom (é só jeito de olhar) e o
+// nome do projeto.
+const CAMPOS = ['bico', 'direcao', 'largura', 'passo', 'espMin', 'prof', 'gama',
+                'moldura', 'folgaMin', 'placa', 'aba', 'furo',
+                'inverter', 'autoc'];
+
+function lerBanco() {
+  try { return JSON.parse(localStorage.getItem(CHAVE) || '{}'); }
+  catch { return {}; }
+}
+
+/** Guarda a foto encolhida: original em base64 estoura o espaço do navegador. */
+function fotoCompacta() {
+  if (!imagem) return null;
+  const max = 1400;
+  const e = Math.min(1, max / Math.max(imagem.naturalWidth, imagem.naturalHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.round(imagem.naturalWidth * e);
+  c.height = Math.round(imagem.naturalHeight * e);
+  c.getContext('2d').drawImage(imagem, 0, 0, c.width, c.height);
+  try { return c.toDataURL('image/jpeg', 0.85); } catch { return null; }
+}
+
+function salvarProjeto() {
+  const nome = $('nomeProjeto').value.trim();
+  if (!nome) { alert('Dê um nome ao projeto antes de salvar.'); return; }
+  if (!imagem) { alert('Carregue uma imagem antes de salvar.'); return; }
+
+  const valores = {};
+  for (const id of CAMPOS) {
+    const el = $(id);
+    valores[id] = el.type === 'checkbox' ? el.checked : el.value;
+  }
+  const banco = lerBanco();
+  banco[nome] = { valores, foto: fotoCompacta(), arquivo: nomeBase, data: new Date().toISOString() };
+  try {
+    localStorage.setItem(CHAVE, JSON.stringify(banco));
+  } catch {
+    alert('Não coube: o navegador guarda uns poucos megabytes. Apague um projeto antigo e salve de novo.');
+    return;
+  }
+  atualizarLista(nome);
+  $('aviso').textContent = `Projeto "${nome}" salvo neste navegador.`;
+}
+
+function abrirProjeto() {
+  const nome = $('listaProjetos').value;
+  if (!nome) return;
+  const p = lerBanco()[nome];
+  if (!p) return;
+
+  for (const [id, v] of Object.entries(p.valores)) {
+    const el = $(id);
+    if (!el) continue;
+    if (el.type === 'checkbox') el.checked = v === true || v === 'true';
+    else el.value = v;
+  }
+  $('nomeProjeto').value = nome;
+  nomeBase = p.arquivo || nome;
+  porBico();
+  rotulos();
+
+  if (p.foto) {
+    const img = new Image();
+    img.onload = () => {
+      imagem = img;
+      mostrarArea('palco');
+      $('btStl').disabled = $('btSvg').disabled = false;
+      recalcular();
+    };
+    img.src = p.foto;
+  } else {
+    recalcular();
+  }
+}
+
+function apagarProjeto() {
+  const nome = $('listaProjetos').value;
+  if (!nome) return;
+  if (!confirm(`Apagar o projeto "${nome}"?`)) return;
+  const banco = lerBanco();
+  delete banco[nome];
+  localStorage.setItem(CHAVE, JSON.stringify(banco));
+  atualizarLista('');
+}
+
+function atualizarLista(selecionado) {
+  const sel = $('listaProjetos');
+  const banco = lerBanco();
+  const nomes = Object.keys(banco).sort((a, b) =>
+    (banco[b].data || '').localeCompare(banco[a].data || ''));
+  sel.innerHTML = '<option value="">—</option>' +
+    nomes.map((n) => `<option value="${n.replace(/"/g, '&quot;')}">${n}</option>`).join('');
+  if (selecionado) sel.value = selecionado;
+}
+
+// Gancho pra automação conseguir dirigir a página de fora (o teste do iframe).
+// Não muda comportamento nenhum: só dá nome às funções que já existem.
+window.__luminus = { salvarProjeto, abrirProjeto, apagarProjeto, lerBanco,
+                     atualizarLista, carregarArquivo, gerarPeca, cancelarFoto, mostrarArea, campos: CAMPOS,
+                     calcular, recalcular, lerControles, desenhar, mostrarDados,
+                     baixarPerguntando, sugestaoNome, aplicar };
+
+$('btSalvar').onclick = salvarProjeto;
+$('btAbrir').onclick = abrirProjeto;
+$('btApagar').onclick = apagarProjeto;
+atualizarLista('');
+
+porBico();
+rotulos();
+document.body.dataset.pronto = '1';
+</script>
+</body>
+</html>
