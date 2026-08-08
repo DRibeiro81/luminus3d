@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nome no Lápis</title>
+<style>
+  @font-face { font-family: 'Fredoka'; src: url('fontes/Fredoka.ttf'); font-display: swap; }
+  @font-face { font-family: 'TitanOne'; src: url('fontes/TitanOne.ttf'); font-display: swap; }
+  @font-face { font-family: 'LuckiestGuy'; src: url('fontes/LuckiestGuy.ttf'); font-display: swap; }
+  @font-face { font-family: 'Baloo2'; src: url('fontes/Baloo2.ttf'); font-display: swap; }
+
+  :root {
+    --bg: #14161a; --painel: #1c1f25; --linha: #2b3038;
+    --texto: #e7eaef; --fraco: #8b93a1; --destaque: #d9a441;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--texto); display: flex;
+    height: 100vh; overflow: hidden;
+  }
+  aside {
+    width: 300px; flex: 0 0 300px; background: var(--painel);
+    border-right: 1px solid var(--linha); max-height: 100vh;
+    display: flex; flex-direction: column;
+  }
+  aside > header { padding: 16px 18px 12px; border-bottom: 1px solid var(--linha); }
+  aside > .corpo { flex: 1; overflow-y: auto; padding: 0 18px 16px; }
+  aside > footer { padding: 12px 18px 14px; border-top: 1px solid var(--linha); }
+  h1 { font-size: 17px; margin: 0 0 2px; }
+  .sub { color: var(--fraco); font-size: 12px; }
+  .sub a { color: var(--destaque); }
+
+  .etapa, details { border-top: 1px solid var(--linha); margin-top: 12px; padding-top: 11px; }
+  .corpo > .etapa:first-child { border-top: 0; margin-top: 0; padding-top: 14px; }
+  .tit, summary {
+    color: var(--fraco); font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .08em; margin: 0 0 11px;
+  }
+  .tit b { color: var(--destaque); margin-right: 7px; }
+  summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: '+'; font-size: 14px; line-height: 1; opacity: .7; }
+  details[open] summary::after { content: '\2212'; }
+  details:not([open]) summary { margin-bottom: 0; }
+
+  label { display: block; margin-bottom: 9px; }
+  .rot { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .rot span:last-child { color: var(--destaque); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--destaque); }
+  select, input[type=number], input[type=text] {
+    width: 100%; padding: 6px 8px; background: #12141a; color: var(--texto);
+    border: 1px solid var(--linha); border-radius: 6px; font-size: 13px;
+  }
+  #nome { font-size: 17px; font-weight: 600; letter-spacing: .04em; }
+  .caixa { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+  .caixa input { accent-color: var(--destaque); }
+  .dica { margin: 6px 0 0; font-size: 11px; color: var(--fraco); line-height: 1.45; }
+  button {
+    width: 100%; padding: 10px; border: 0; border-radius: 8px; font-size: 14px;
+    font-weight: 600; cursor: pointer; margin-top: 8px;
+    background: var(--destaque); color: #1a1206;
+  }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+
+  main { flex: 1; display: flex; flex-direction: column; padding: 18px; gap: 14px;
+         min-width: 0; min-height: 0; }
+  #palco { flex: 1; display: flex; flex-direction: column; gap: 16px; overflow: auto;
+           min-height: 0; align-items: center; justify-content: center;
+           border-radius: 14px; background: #0f1114; padding: 18px; }
+  canvas { max-width: 100%; height: auto; border-radius: 6px; }
+  #legenda { color: var(--fraco); font-size: 11px; text-align: center; }
+
+  #dados { display: flex; gap: 22px; flex-wrap: wrap; border-top: 1px solid var(--linha);
+           padding-top: 12px; font-size: 12px; color: var(--fraco); flex: 0 0 auto; }
+  #dados b { display: block; color: var(--texto); font-size: 15px; font-weight: 600;
+             font-variant-numeric: tabular-nums; }
+  #aviso { color: var(--destaque); font-size: 12px; min-height: 18px; }
+</style>
+</head>
+<body>
+
+<aside>
+  <header>
+    <h1>Nome no Lápis</h1>
+    <div class="sub">O nome vira uma peça que entra no lápis.
+      <a href="app.html">Quadros</a> · <a href="luz.html">Foto na Luz</a> ·
+      <a href="vaso.html">Vasos</a></div>
+  </header>
+
+  <div class="corpo">
+    <div class="etapa">
+      <p class="tit"><b>1</b>Nome</p>
+      <input type="text" id="nome" value="LEONARDO" maxlength="20" autocomplete="off">
+      <label style="margin-top:9px">
+        <div class="rot"><span>Letra</span></div>
+        <select id="fonte">
+          <option value="Fredoka">Redonda (Fredoka)</option>
+          <option value="TitanOne" selected>Gorda (Titan One)</option>
+          <option value="LuckiestGuy">Desenho (Luckiest Guy)</option>
+          <option value="Baloo2">Arredondada (Baloo)</option>
+        </select>
+      </label>
+      <div class="caixa"><input type="checkbox" id="maiusculas" checked>
+        <span>Tudo em maiúscula</span></div>
+      <p class="dica">Letra gorda imprime melhor: traço fino demais o bico não deposita.</p>
+    </div>
+
+    <div class="etapa">
+      <p class="tit"><b>2</b>Tamanho</p>
+      <label><div class="rot"><span>Altura das letras</span><span id="rAltura">16 mm</span></div>
+        <input type="range" id="altura" min="8" max="40" step="1" value="16"></label>
+      <label><div class="rot"><span>Profundidade</span><span id="rProf">13 mm</span></div>
+        <input type="range" id="profundidade" min="8" max="25" step="0.5" value="13"></label>
+      <label><div class="rot"><span>Encaixe entre letras</span><span id="rJunta">1,2 mm</span></div>
+        <input type="range" id="junta" min="0.3" max="4" step="0.1" value="1.2"></label>
+      <p class="dica">Cada letra encosta na anterior e entra esse tanto. É essa
+        junta que segura a peça inteira.</p>
+    </div>
+
+    <div class="etapa">
+      <p class="tit"><b>3</b>Lápis</p>
+      <label><div class="rot"><span>Grossura do lápis</span><span id="rLapis">7,6 mm</span></div>
+        <input type="range" id="lapis" min="5" max="12" step="0.1" value="7.6"></label>
+      <label><div class="rot"><span>Folga</span><span id="rFolga">0,4 mm</span></div>
+        <input type="range" id="folga" min="0" max="1.2" step="0.05" value="0.4"></label>
+      <label><div class="rot"><span>Altura do canal</span><span id="rCanalZ">5,5 mm</span></div>
+        <input type="range" id="canalZ" min="1" max="20" step="0.5" value="5.5"></label>
+      <div class="caixa"><input type="checkbox" id="gota" checked>
+        <span>Teto em bico (imprime sem apoio)</span></div>
+      <p class="dica" id="dicaCanal">Enfie pela ponta apitada, não pela borracha: o
+        metal da borracha é mais grosso que o lápis.</p>
+    </div>
+
+    <details>
+      <summary>Ajustes de impressão</summary>
+      <label><div class="rot"><span>Parede em volta do canal</span><span id="rParede">1,2 mm</span></div>
+        <input type="range" id="parede" min="0.8" max="3" step="0.1" value="1.2"></label>
+      <label><div class="rot"><span>Bico</span><span id="rBico">0,4 mm</span></div>
+        <input type="range" id="bico" min="0.2" max="0.8" step="0.05" value="0.4"></label>
+      <label><div class="rot"><span>Finura da malha</span><span id="rFinura">0,12 mm</span></div>
+        <input type="range" id="finura" min="0.06" max="0.3" step="0.01" value="0.12"></label>
+      <p class="dica">Finura menor deixa a curva das letras mais lisa e o arquivo maior.</p>
+    </details>
+  </div>
+
+  <footer>
+    <button id="btBaixar" disabled>Baixar STL</button>
+    <p class="dica">Imprima <b>deitado</b>, com a frente das letras na mesa. Sem suporte.</p>
+  </footer>
+</aside>
+
+<main>
+  <div id="palco">
+    <canvas id="tela"></canvas>
+    <canvas id="corte"></canvas>
+    <div id="legenda">Em cima, a peça de frente. Embaixo, o corte de lado — a
+      esquerda é a frente das letras, que encosta na mesa da impressora, e o bico
+      do canal aponta pra cima durante a impressão.</div>
+  </div>
+
+  <div id="dados">
+    <div>Peça<b id="dTam">—</b></div>
+    <div>Traço mais fino<b id="dTraco">—</b></div>
+    <div>Abraço no lápis<b id="dAperto">—</b></div>
+    <div>Peso<b id="dPeso">—</b></div>
+    <div>Tempo<b id="dTempo">—</b></div>
+    <div>Arquivo<b id="dArq">—</b></div>
+  </div>
+  <div id="aviso"></div>
+</main>
+
+<script type="module">
+import { nomeNoLapis, pedacos, tracoMaisFino, encaixeDoCanal, canalEmY } from './texto.js';
+import { escreverStl } from './geometria.js';
+
+const DENSIDADE = 1.24;   // PLA, g/cm³
+const $ = (id) => document.getElementById(id);
+let ultimo = null, pendente = 0;
+
+/* ---------------- a palavra vira máscara ---------------- */
+/**
+ * Desenha cada letra sozinha e mede a tinta dela linha a linha.
+ *
+ * Guardado em cache porque só muda quando o nome, a letra ou o tamanho de
+ * desenho mudam — mexer no lápis ou na profundidade não precisa redesenhar
+ * fonte nenhuma.
+ */
+const cacheLetras = new Map();
+function letrasDe(texto, fonte, tamanho) {
+  const chave = `${texto}|${fonte}|${tamanho}`;
+  const guardado = cacheLetras.get(chave);
+  if (guardado) return guardado;
+
+  const alt = Math.ceil(tamanho * 2.4);
+  const base = tamanho * 1.75;
+  const fonteCss = `${tamanho}px "${fonte}", sans-serif`;
+  const saida = [];
+  for (const ch of [...texto]) {
+    if (ch === ' ') { saida.push({ espaco: true, largura: tamanho * 0.32 }); continue; }
+    const cv = document.createElement('canvas');
+    const c = cv.getContext('2d', { willReadFrequently: true });
+    c.font = fonteCss;
+    const larg = Math.ceil(c.measureText(ch).width + tamanho * 1.2);
+    cv.width = larg; cv.height = alt;
+    const c2 = cv.getContext('2d', { willReadFrequently: true });
+    c2.font = fonteCss; c2.textBaseline = 'alphabetic'; c2.fillStyle = '#fff';
+    c2.fillText(ch, tamanho * 0.6, base);
+
+    const d = c2.getImageData(0, 0, larg, alt).data;
+    // primeira e última coluna com tinta, linha por linha
+    const min = new Int32Array(alt).fill(-1), max = new Int32Array(alt).fill(-1);
+    let x0 = larg, x1 = -1, y0 = alt, y1 = -1;
+    for (let y = 0; y < alt; y++) {
+      for (let x = 0; x < larg; x++) {
+        if (d[(y * larg + x) * 4 + 3] < 128) continue;
+        if (min[y] < 0) min[y] = x;
+        max[y] = x;
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+    }
+    if (x1 < 0) { saida.push({ espaco: true, largura: tamanho * 0.32 }); continue; }
+    // reancorado na borda esquerda da tinta
+    for (let y = 0; y < alt; y++) { if (min[y] >= 0) { min[y] -= x0; max[y] -= x0; } }
+    saida.push({ cv, x0, y0, y1, min, max, largura: x1 - x0 + 1 });
+  }
+  const r = { letras: saida, alt, refAltura: Math.max(1, ...saida.filter(l => !l.espaco).map(l => l.y1 - l.y0 + 1)) };
+  if (cacheLetras.size > 40) cacheLetras.clear();
+  cacheLetras.set(chave, r);
+  return r;
+}
+
+/**
+ * Monta a palavra encaixando letra por letra e devolve a máscara.
+ *
+ * Espaçamento por porcentagem não servia: dependendo do nome e da fonte, duas
+ * letras ficavam sem se tocar e a peça saía em pedaços soltos. Aqui cada letra
+ * é empurrada até ENCOSTAR na tinta da anterior e entra mais um tanto — medido
+ * em mm, não em proporção. A peça sai inteira por construção.
+ */
+function mascaraDoNome(texto, fonte, alturaPx, encaixeMm, alturaMm) {
+  const tamanho = Math.min(480, Math.max(140, alturaPx * 2));
+  const { letras, alt, refAltura } = letrasDe(texto, fonte, tamanho);
+  if (!letras.some((l) => !l.espaco)) return null;
+
+  const pxPorMm = refAltura / alturaMm;
+  const entra = Math.max(1, Math.round(encaixeMm * pxPorMm));
+
+  const gMax = new Int32Array(alt).fill(-1);
+  const postos = [];
+  let cursor = 0, direita = 0;
+  for (const l of letras) {
+    if (l.espaco) { cursor = direita + Math.round(l.largura); continue; }
+    let dx = cursor;
+    if (direita > 0) {
+      let contato = -Infinity;
+      for (let y = 0; y < alt; y++) {
+        if (gMax[y] < 0 || l.min[y] < 0) continue;
+        contato = Math.max(contato, gMax[y] - l.min[y] + 1);
+      }
+      dx = contato === -Infinity ? direita + entra : contato - entra;
+    }
+    postos.push({ l, dx });
+    for (let y = 0; y < alt; y++) {
+      if (l.max[y] < 0) continue;
+      const m = l.max[y] + dx;
+      if (m > gMax[y]) gMax[y] = m;
+      if (m > direita) direita = m;
+    }
+    cursor = direita;
+  }
+
+  const margem = 4;
+  const cv = document.createElement('canvas');
+  cv.width = direita + margem * 2 + 2;
+  cv.height = alt;
+  const c = cv.getContext('2d', { willReadFrequently: true });
+  for (const { l, dx } of postos) {
+    c.drawImage(l.cv, l.x0, 0, l.largura, alt, dx + margem, 0, l.largura, alt);
+  }
+
+  const img = c.getImageData(0, 0, cv.width, cv.height).data;
+  let x0 = cv.width, x1 = -1, y0 = cv.height, y1 = -1;
+  for (let y = 0; y < cv.height; y++) for (let i = 0; i < cv.width; i++) {
+    if (img[(y * cv.width + i) * 4 + 3] < 128) continue;
+    if (i < x0) x0 = i; if (i > x1) x1 = i;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  if (x1 < 0) return null;
+
+  // agora sim na altura pedida
+  const escala = alturaPx / (y1 - y0 + 1);
+  const L = Math.max(4, Math.round((y1 - y0 + 1) * escala));
+  const C = Math.max(4, Math.round((x1 - x0 + 1) * escala));
+  const fim = document.createElement('canvas');
+  fim.width = C; fim.height = L;
+  const c3 = fim.getContext('2d', { willReadFrequently: true });
+  c3.imageSmoothingQuality = 'high';
+  c3.drawImage(cv, x0, y0, x1 - x0 + 1, y1 - y0 + 1, 0, 0, C, L);
+  const d = c3.getImageData(0, 0, C, L).data;
+  const m = [];
+  for (let y = 0; y < L; y++) {
+    const linha = new Uint8Array(C);
+    for (let i = 0; i < C; i++) linha[i] = d[(y * C + i) * 4 + 3] > 128 ? 1 : 0;
+    m.push(linha);
+  }
+  return m;
+}
+
+/* ---------------- cálculo ---------------- */
+function opcoes() {
+  const furo = +$('lapis').value + +$('folga').value;
+  return {
+    mmPorPx: +$('finura').value,
+    profundidade: +$('profundidade').value,
+    parede: +$('parede').value,
+    furo,
+    furoZ: +$('canalZ').value,
+    gota: $('gota').checked,
+  };
+}
+
+function calcular() {
+  const bruto = $('nome').value.trim();
+  const texto = $('maiusculas').checked ? bruto.toLocaleUpperCase('pt-BR') : bruto;
+  if (!texto) return null;
+  const op = opcoes();
+  const alturaPx = Math.max(8, Math.round(+$('altura').value / op.mmPorPx));
+  const alturaMm = +$('altura').value;
+  const m = mascaraDoNome(texto, $('fonte').value, alturaPx, +$('junta').value, alturaMm);
+  if (!m) return null;
+  const r = nomeNoLapis(op, m);
+  return {
+    ...r, op, mascara: m, texto,
+    partes: pedacos(m),
+    fino: tracoMaisFino(m, op.mmPorPx),
+    encaixe: encaixeDoCanal(op),
+  };
+}
+
+/* ---------------- prévia ---------------- */
+/** A peça de frente: o desenho que sai impresso, com o lápis por trás. */
+function desenhar(r) {
+  const m = r.mascara, L = m.length, C = m[0].length;
+  const escala = Math.min(1000 / C, 260 / L, 4);
+  const cv = $('tela');
+  cv.width = Math.max(1, Math.round(C * escala));
+  cv.height = Math.max(1, Math.round(L * escala));
+  const c = cv.getContext('2d');
+  c.fillStyle = '#0f1114'; c.fillRect(0, 0, cv.width, cv.height);
+
+  // o lápis atrás, pra ver onde ele passa e por onde ele aparece
+  const zPx = (z) => cv.height - (z / r.op.mmPorPx) * escala;
+  const meio = zPx(r.op.furoZ), raio = (r.op.furo / 2 / r.op.mmPorPx) * escala;
+  c.fillStyle = '#3a3f49';
+  c.fillRect(-20, meio - raio, cv.width + 40, raio * 2);
+
+  const img = c.getImageData(0, 0, cv.width, cv.height);
+  for (let y = 0; y < cv.height; y++) {
+    const sy = Math.min(L - 1, Math.floor(y / escala));
+    for (let x = 0; x < cv.width; x++) {
+      if (!m[sy][Math.min(C - 1, Math.floor(x / escala))]) continue;
+      const i = (y * cv.width + x) * 4;
+      img.data[i] = 217; img.data[i + 1] = 164; img.data[i + 2] = 65; img.data[i + 3] = 255;
+    }
+  }
+  c.putImageData(img, 0, 0);
+}
+
+/** O corte de lado: onde o canal fica dentro da profundidade. */
+function desenharCorte(r) {
+  const cv = $('corte');
+  const escala = 9;
+  const D = r.op.profundidade, A = r.altura;
+  cv.width = Math.round(D * escala) + 2;
+  cv.height = Math.round(A * escala) + 2;
+  const c = cv.getContext('2d');
+  c.fillStyle = '#0f1114'; c.fillRect(0, 0, cv.width, cv.height);
+  const X = (y) => 1 + y * escala;              // Y da peça vira X da tela
+  const Y = (z) => cv.height - 1 - z * escala;
+
+  c.fillStyle = '#d9a441';
+  c.fillRect(X(0), Y(A), D * escala, A * escala);
+  // o vazio do canal, altura por altura
+  c.fillStyle = '#0f1114';
+  for (let z = 0; z <= A; z += 0.05) {
+    const f = canalEmY({ ...r.op, furoY: r.furoY }, z - r.op.furoZ);
+    if (!f) continue;
+    c.fillRect(X(f[0]), Y(z), (f[1] - f[0]) * escala, escala * 0.06 + 1);
+  }
+  c.strokeStyle = '#5a6270'; c.lineWidth = 1;
+  c.strokeRect(X(0) + .5, Y(A) + .5, D * escala - 1, A * escala - 1);
+}
+
+/* ---------------- números e avisos ---------------- */
+function mostrar(r) {
+  const n = (v, d = 1) => v.toFixed(d).replace('.', ',');
+  $('dTam').textContent = `${Math.round(r.largura)} × ${Math.round(r.altura)} × ${n(r.profundidade)} mm`;
+  $('dTraco').textContent = `${n(r.fino, 2)} mm`;
+  $('dAperto').textContent = `${Math.round(r.aperto * 100)}%`;
+  const g = r.volume * DENSIDADE;
+  $('dPeso').textContent = `~${g.toFixed(1)} g`;
+  $('dTempo').textContent = `~${Math.max(1, Math.round(g / 0.18))} min`;
+  $('dArq').textContent = `${(r.tris.length * 50 / 1e6).toFixed(1)} MB`;
+
+  // Canal baixo demais rompe o chão da peça: em vez de furo, vira uma fenda que
+  // encaixa por pressão. Não é defeito — só muda como o cliente põe no lápis.
+  const raio = r.op.furo / 2;
+  const abertura = r.op.furoZ < raio ? 2 * Math.sqrt(raio * raio - r.op.furoZ * r.op.furoZ) : 0;
+  $('dicaCanal').textContent = abertura > 0
+    ? `Fenda de ${n(abertura)} mm embaixo: encaixa por pressão, sem precisar enfiar pela ponta.`
+    : 'Furo fechado: enfie pela ponta apitada, não pela borracha — o metal da borracha é mais grosso que o lápis.';
+
+  const av = [];
+  if (abertura > r.op.furo * 0.92) av.push('A fenda embaixo ficou larga demais e o lápis cai. Suba a altura do canal.');
+  if (r.partes > 1) av.push(`As letras estão soltas (${r.partes} pedaços). Aumente o encaixe entre letras.`);
+  if (r.fino < +$('bico').value) av.push(`Traço de ${n(r.fino, 2)} mm é mais fino que o bico: some na impressão. Aumente a altura ou troque a letra.`);
+  if (r.profundidade < r.encaixe.minima) av.push(`O canal não cabe: precisa de pelo menos ${n(r.encaixe.minima)} mm de profundidade.`);
+  if (r.aperto < 0.5) av.push('A peça abraça pouco o lápis e vai ficar frouxa. Baixe a altura do canal.');
+  if (r.largura > 210) av.push('Mais largo que a mesa da Kobra X (220 mm).');
+  $('aviso').textContent = av.join(' ');
+  return r.partes === 1 && r.profundidade >= r.encaixe.minima;
+}
+
+function aplicar(r) {
+  ultimo = r;
+  if (!r) { $('btBaixar').disabled = true; $('aviso').textContent = 'Escreva um nome.'; return; }
+  desenhar(r); desenharCorte(r);
+  $('btBaixar').disabled = !mostrar(r);
+}
+
+function agendar() {
+  clearTimeout(pendente);
+  pendente = setTimeout(recalcular, 90);
+}
+
+/* ---------------- baixar ---------------- */
+function baixar(dados, nome) {
+  const url = URL.createObjectURL(new Blob([dados], { type: 'model/stl' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = nome; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+$('btBaixar').onclick = async () => {
+  if (!ultimo) return;
+  const limpo = ultimo.texto.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'nome';
+  const sugestao = `${limpo}-lapis-${Math.round(ultimo.altura)}mm.stl`;
+  let destino = null;
+  if (window.showSaveFilePicker) {
+    try {
+      destino = await window.showSaveFilePicker({
+        suggestedName: sugestao,
+        types: [{ description: 'STL', accept: { 'model/stl': ['.stl'] } }],
+      });
+    } catch (e) { if (e.name === 'AbortError') return; destino = null; }
+  }
+  let nome = sugestao;
+  if (!destino) {
+    const resp = prompt('Nome do arquivo:', sugestao);
+    if (resp === null) return;
+    nome = resp.trim() || sugestao;
+    if (!nome.toLowerCase().endsWith('.stl')) nome += '.stl';
+  }
+  const b = $('btBaixar'), antes = b.textContent;
+  b.textContent = 'Montando…'; b.disabled = true;
+  try {
+    const dados = escreverStl(ultimo.tris, 'luminus 3d');
+    if (destino) {
+      const f = await destino.createWritable();
+      await f.write(new Blob([dados], { type: 'model/stl' }));
+      await f.close();
+    } else baixar(dados, nome);
+  } finally { b.textContent = antes; b.disabled = false; }
+};
+
+/* ---------------- controles ---------------- */
+const vg = (v, d = 1) => v.toFixed(d).replace('.', ',');
+function rotulos() {
+  $('rAltura').textContent = `${$('altura').value} mm`;
+  $('rProf').textContent = `${vg(+$('profundidade').value)} mm`;
+  $('rJunta').textContent = `${vg(+$('junta').value)} mm`;
+  $('rLapis').textContent = `${vg(+$('lapis').value)} mm`;
+  $('rFolga').textContent = `${vg(+$('folga').value, 2)} mm`;
+  $('rCanalZ').textContent = `${vg(+$('canalZ').value)} mm`;
+  $('rParede').textContent = `${vg(+$('parede').value)} mm`;
+  $('rBico').textContent = `${vg(+$('bico').value, 2)} mm`;
+  $('rFinura').textContent = `${vg(+$('finura').value, 2)} mm`;
+}
+document.querySelectorAll('aside input, aside select').forEach((el) =>
+  el.addEventListener('input', () => { rotulos(); agendar(); }));
+
+/**
+ * Puxa a fonte antes de desenhar.
+ *
+ * @font-face só baixa quando alguém usa a fonte na PÁGINA. A gente só usa em
+ * canvas, e canvas não dispara o download: sem isso a peça sairia desenhada na
+ * fonte do sistema, calada, e ninguém entenderia por quê.
+ */
+const FONTES = ['Fredoka', 'TitanOne', 'LuckiestGuy', 'Baloo2'];
+const prontas = new Set();
+async function garantirFonte(nome) {
+  if (!document.fonts || prontas.has(nome)) return;
+  try { await document.fonts.load(`400 100px "${nome}"`); } catch (e) { /* cai na do sistema */ }
+  prontas.add(nome);
+}
+async function recalcular() {
+  await garantirFonte($('fonte').value);
+  aplicar(calcular());
+}
+
+window.__texto = { calcular, aplicar, mascaraDoNome, agendar, recalcular, garantirFonte };
+rotulos();
+recalcular();
+</script>
+</body>
+</html>
