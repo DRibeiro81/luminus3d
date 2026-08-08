@@ -38,6 +38,23 @@ export function corridas(linha) {
 }
 
 /**
+ * Onde a borda REALMENTE cai dentro da célula, usando o quanto ela está pintada.
+ *
+ * A máscara é sim ou não: a célula da ponta ou entra inteira ou fica de fora, e
+ * a lateral da letra vira escada de meio décimo. A cobertura (0 a 1, que é a
+ * suavização do desenho) diz a fração pintada — célula 40% cheia põe a borda a
+ * 40% dela. Traço quase reto sai reto, sem precisar de malha mais fina.
+ */
+export function bordasFinas(a, b, cob) {
+  if (!cob) return [a, b];
+  const e = a + (1 - Math.min(1, cob[a]));
+  const d = (b - 1) + Math.min(1, cob[b - 1]);
+  // piso de um quinto de célula: fatia mais fina que isso não vira material,
+  // só uma caixa quase plana pra o fatiador tropeçar
+  return d - e > 0.2 ? [e, d] : [a, b];
+}
+
+/**
  * Onde o canal do lápis começa e termina em Y, na altura `dz` acima ou abaixo
  * do centro dele. Devolve null onde o canal não alcança.
  *
@@ -138,11 +155,14 @@ export function tracoMaisFino(mascara, mmPorPx, limite = 8) {
  * `mascara[linha][coluna]`, linha 0 no topo. `op`:
  *   mmPorPx, profundidade, parede, furo (já com folga), furoZ, gota.
  *
+ * `cobertura` é opcional: a mesma grade, mas com o quanto cada célula está
+ * pintada, pra a borda lateral não sair em degrau (ver `bordasFinas`).
+ *
  * Uma caixa por trecho de material, cortada em dois onde o canal passa. As
  * caixas se SOBREPÕEM meio décimo em Z de propósito: encostadas, dividiriam
  * face e a malha deixaria de ser sólida pro fatiador.
  */
-export function nomeNoLapis(op, mascara) {
+export function nomeNoLapis(op, mascara, cobertura) {
   const L = mascara.length, C = mascara[0].length;
   const e = op.mmPorPx;
   const D = op.profundidade;
@@ -169,7 +189,8 @@ export function nomeNoLapis(op, mascara) {
     const canal = canalEmY(cfg, perto - zc);
 
     for (const [c0, c1] of linhas) {
-      const x0 = c0 * e, x1 = c1 * e;
+      const [f0, f1] = bordasFinas(c0, c1, cobertura && cobertura[j]);
+      const x0 = f0 * e, x1 = f1 * e;
       if (!canal) { caixa(tris, x0, 0, z0 - ov, x1, D, z1 + ov); continue; }
       const [ya, yb] = canal;
       if (ya > 0.001) caixa(tris, x0, 0, z0 - ov, x1, Math.min(ya, D), z1 + ov);

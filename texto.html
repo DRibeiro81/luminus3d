@@ -301,13 +301,20 @@ function mascaraDoNome(texto, fonte, alturaPx, encaixeMm, alturaMm) {
   c3.imageSmoothingQuality = 'high';
   c3.drawImage(cv, x0, y0, x1 - x0 + 1, y1 - y0 + 1, 0, 0, C, L);
   const d = c3.getImageData(0, 0, C, L).data;
-  const m = [];
+  const m = [], cob = [];
   for (let y = 0; y < L; y++) {
-    const linha = new Uint8Array(C);
-    for (let i = 0; i < C; i++) linha[i] = d[(y * C + i) * 4 + 3] > 128 ? 1 : 0;
-    m.push(linha);
+    const linha = new Uint8Array(C), fracao = new Float32Array(C);
+    for (let i = 0; i < C; i++) {
+      const a = d[(y * C + i) * 4 + 3] / 255;
+      fracao[i] = a;
+      linha[i] = a > 0.5 ? 1 : 0;
+    }
+    m.push(linha); cob.push(fracao);
   }
-  return m;
+  // O desenho em alta segue junto: a prévia usa ele, não a máscara. Mostrar a
+  // máscara pixel a pixel fazia a peça parecer serrilhada — e ela não é: a
+  // borda lateral é calculada em fração de célula.
+  return { mascara: m, cobertura: cob, alta: { cv, x0, y0, w: x1 - x0 + 1, h: y1 - y0 + 1 } };
 }
 
 /* ---------------- cálculo ---------------- */
@@ -330,11 +337,12 @@ function calcular() {
   const op = opcoes();
   const alturaPx = Math.max(8, Math.round(+$('altura').value / op.mmPorPx));
   const alturaMm = +$('altura').value;
-  const m = mascaraDoNome(texto, $('fonte').value, alturaPx, +$('junta').value, alturaMm);
-  if (!m) return null;
-  const r = nomeNoLapis(op, m);
+  const feito = mascaraDoNome(texto, $('fonte').value, alturaPx, +$('junta').value, alturaMm);
+  if (!feito) return null;
+  const m = feito.mascara;
+  const r = nomeNoLapis(op, m, feito.cobertura);
   return {
-    ...r, op, mascara: m, texto,
+    ...r, op, mascara: m, alta: feito.alta, texto,
     partes: pedacos(m),
     fino: tracoMaisFino(m, op.mmPorPx),
     encaixe: encaixeDoCanal(op),
@@ -344,8 +352,8 @@ function calcular() {
 /* ---------------- prévia ---------------- */
 /** A peça de frente: o desenho que sai impresso, com o lápis por trás. */
 function desenhar(r) {
-  const m = r.mascara, L = m.length, C = m[0].length;
-  const escala = Math.min(1000 / C, 260 / L, 4);
+  const L = r.mascara.length, C = r.mascara[0].length;
+  const escala = Math.min(1600 / C, 420 / L, 6);
   const cv = $('tela');
   cv.width = Math.max(1, Math.round(C * escala));
   cv.height = Math.max(1, Math.round(L * escala));
@@ -358,16 +366,20 @@ function desenhar(r) {
   c.fillStyle = '#3a3f49';
   c.fillRect(-20, meio - raio, cv.width + 40, raio * 2);
 
-  const img = c.getImageData(0, 0, cv.width, cv.height);
-  for (let y = 0; y < cv.height; y++) {
-    const sy = Math.min(L - 1, Math.floor(y / escala));
-    for (let x = 0; x < cv.width; x++) {
-      if (!m[sy][Math.min(C - 1, Math.floor(x / escala))]) continue;
-      const i = (y * cv.width + x) * 4;
-      img.data[i] = 217; img.data[i + 1] = 164; img.data[i + 2] = 65; img.data[i + 3] = 255;
-    }
-  }
-  c.putImageData(img, 0, 0);
+  // desenhado do original em alta, não da máscara: a peça tem borda lisa e a
+  // prévia tem que mostrar isso
+  const a = r.alta;
+  c.imageSmoothingQuality = 'high';
+  c.globalCompositeOperation = 'source-over';
+  const tmp = document.createElement('canvas');
+  tmp.width = cv.width; tmp.height = cv.height;
+  const ct = tmp.getContext('2d');
+  ct.imageSmoothingQuality = 'high';
+  ct.drawImage(a.cv, a.x0, a.y0, a.w, a.h, 0, 0, cv.width, cv.height);
+  ct.globalCompositeOperation = 'source-in';
+  ct.fillStyle = '#d9a441';
+  ct.fillRect(0, 0, cv.width, cv.height);
+  c.drawImage(tmp, 0, 0);
 }
 
 /** O corte de lado: onde o canal fica dentro da profundidade. */
