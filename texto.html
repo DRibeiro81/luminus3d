@@ -71,6 +71,16 @@
            min-height: 0; align-items: center; justify-content: center;
            border-radius: 14px; background: #0f1114; padding: 18px; }
   canvas { max-width: 100%; height: auto; border-radius: 6px; }
+  #visor { width: 100%; height: 100%; max-width: none; border-radius: 10px;
+           cursor: grab; }
+  #visor:active { cursor: grabbing; }
+  #cena { position: relative; flex: 1; width: 100%; min-height: 260px; }
+  #girar { position: absolute; left: 12px; bottom: 10px; font-size: 11px;
+           color: var(--fraco); pointer-events: none; }
+  .abas { display: flex; gap: 6px; }
+  .abas button { width: auto; padding: 5px 14px; margin: 0; font-size: 12px;
+                 background: transparent; border: 1px solid var(--linha); color: var(--fraco); }
+  .abas button.ativa { background: var(--destaque); color: #1a1206; border-color: var(--destaque); }
   #legenda { color: var(--fraco); font-size: 11px; text-align: center; }
 
   #dados { display: flex; gap: 22px; flex-wrap: wrap; border-top: 1px solid var(--linha);
@@ -154,9 +164,15 @@
 
 <main>
   <div id="palco">
-    <canvas id="tela"></canvas>
+    <div class="abas">
+      <button data-ver="3d" class="ativa">Peça em 3D</button>
+      <button data-ver="plano">De frente</button>
+    </div>
+    <div id="cena"><canvas id="visor"></canvas>
+      <div id="girar">Arraste pra girar, role pra aproximar.</div></div>
+    <canvas id="tela" hidden></canvas>
     <canvas id="corte"></canvas>
-    <div id="legenda">Em cima, a peça de frente. Embaixo, o corte de lado — a
+    <div id="legenda">Em cima, a peça. Embaixo, o corte de lado — a
       esquerda é a frente das letras, que encosta na mesa da impressora, e o bico
       do canal aponta pra cima durante a impressão.</div>
   </div>
@@ -175,6 +191,7 @@
 <script type="module">
 import { nomeNoLapis, pedacos, tracoMaisFino, encaixeDoCanal, canalEmY } from './texto.js';
 import { escreverStl } from './geometria.js';
+import { criarVisor } from './visor3d.js';
 
 const DENSIDADE = 1.24;   // PLA, g/cm³
 const $ = (id) => document.getElementById(id);
@@ -437,12 +454,23 @@ function mostrar(r) {
   return r.partes === 1 && r.profundidade >= r.encaixe.minima;
 }
 
+let visor = null, vendo = '3d';
 function aplicar(r) {
   ultimo = r;
   if (!r) { $('btBaixar').disabled = true; $('aviso').textContent = 'Escreva um nome.'; return; }
-  desenhar(r); desenharCorte(r);
+  const em3d = vendo === '3d' && visor && visor.ok;
+  $('cena').hidden = !em3d;
+  $('tela').hidden = em3d;
+  if (em3d) { visor.enviar(r.tris); visor.desenhar(); } else desenhar(r);
+  desenharCorte(r);
   $('btBaixar').disabled = !mostrar(r);
 }
+document.querySelectorAll('.abas button').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('.abas button').forEach((o) => o.classList.remove('ativa'));
+  b.classList.add('ativa');
+  vendo = b.dataset.ver;
+  aplicar(ultimo);
+});
 
 function agendar() {
   clearTimeout(pendente);
@@ -524,7 +552,12 @@ async function recalcular() {
   aplicar(calcular());
 }
 
-window.__texto = { calcular, aplicar, mascaraDoNome, agendar, recalcular, garantirFonte };
+window.__texto = { calcular, aplicar, mascaraDoNome, agendar, recalcular, garantirFonte,
+                   visor: () => visor, ver: () => vendo };
+// A peça é larga e baixa: de longe e de cima ela vira um risco. Perto e quase
+// de frente é como o cliente olha o lápis na mão.
+visor = criarVisor($('visor'), { giroInicial: 0, inclinaInicial: -1.34, distInicial: 1, enquadrar: true, fov: 0.40 });
+if (!visor.ok) { vendo = 'plano'; document.querySelector('.abas').hidden = true; }
 rotulos();
 recalcular();
 </script>

@@ -149,53 +149,140 @@ export function tracoMaisFino(mascara, mmPorPx, limite = 8) {
   return (2 * k + 1) * mmPorPx;
 }
 
+/* ================================================================
+   Intervalos: a peça inteira é descrita por trechos numa reta
+   ================================================================ */
+
+/** Onde duas listas de trechos se sobrepõem. Ambas ordenadas e sem encostar. */
+export function intersecao(A, B) {
+  const saida = [];
+  let i = 0, j = 0;
+  while (i < A.length && j < B.length) {
+    const a = Math.max(A[i][0], B[j][0]), b = Math.min(A[i][1], B[j][1]);
+    if (b - a > 1e-9) saida.push([a, b]);
+    if (A[i][1] < B[j][1]) i++; else j++;
+  }
+  return saida;
+}
+
+/** O que está em A e não está em B. */
+export function diferenca(A, B) {
+  const saida = [];
+  for (const [a0, a1] of A) {
+    let atual = a0;
+    for (const [b0, b1] of B) {
+      if (b1 <= atual) continue;
+      if (b0 >= a1) break;
+      if (b0 > atual) saida.push([atual, Math.min(b0, a1)]);
+      atual = Math.max(atual, b1);
+      if (atual >= a1) break;
+    }
+    if (a1 - atual > 1e-9) saida.push([atual, a1]);
+  }
+  return saida;
+}
+
 /**
- * Monta a peça.
+ * Monta a peça como uma CASCA FECHADA, não como pilha de caixas.
+ *
+ * A primeira versão empilhava uma caixa por faixa de pixel, sobrepostas pra
+ * emendar. Funcionava pro fatiador e era horrível de olhar: as faces da frente
+ * ficavam coplanares e sobrepostas, e no 3D a peça saía listrada — uma listra
+ * por faixa. Agora cada face só existe onde o vizinho NÃO tem material, então a
+ * frente da peça é uma superfície só, sem emenda e sem repetição.
  *
  * `mascara[linha][coluna]`, linha 0 no topo. `op`:
  *   mmPorPx, profundidade, parede, furo (já com folga), furoZ, gota.
- *
- * `cobertura` é opcional: a mesma grade, mas com o quanto cada célula está
- * pintada, pra a borda lateral não sair em degrau (ver `bordasFinas`).
- *
- * Uma caixa por trecho de material, cortada em dois onde o canal passa. As
- * caixas se SOBREPÕEM meio décimo em Z de propósito: encostadas, dividiriam
- * face e a malha deixaria de ser sólida pro fatiador.
+ * `cobertura` é opcional (ver `bordasFinas`).
  */
 export function nomeNoLapis(op, mascara, cobertura) {
   const L = mascara.length, C = mascara[0].length;
-  const e = op.mmPorPx;
-  const D = op.profundidade;
+  const e = op.mmPorPx, D = op.profundidade;
   const { furoY } = encaixeDoCanal(op);
   const cfg = { ...op, furoY };
-  // Sobreposição entre faixas vizinhas. 0,3 e não 0,5: com meia célula, a caixa
-  // de uma linha terminava EXATAMENTE onde a de duas linhas acima começava, os
-  // vértices viravam o mesmo ponto e a malha rachava em triângulos soltos.
-  // Sobrepor sólido é seguro; encostar ponto a ponto nunca é.
-  const ov = e * 0.3;
+
+  // Cada faixa de altura vira: trechos com material em X, e onde há material em
+  // Y (um pedaço só, ou dois quando o canal do lápis passa no meio).
+  const faixas = [];
+  for (let k = 0; k < L; k++) {
+    const j = L - 1 - k;                       // linha 0 da máscara é o topo
+    const z0 = k * e, z1 = z0 + e;
+    const xs = corridas(mascara[j]).map(([c0, c1]) => {
+      const [f0, f1] = bordasFinas(c0, c1, cobertura && cobertura[j]);
+      return [f0 * e, f1 * e];
+    });
+    // dentro da faixa, o Z mais perto do centro do canal: assim o furo nunca
+    // sai menor do que o lápis precisa
+    const canal = canalEmY(cfg, Math.max(z0, Math.min(z1, op.furoZ)) - op.furoZ);
+    let ys;
+    if (!canal) ys = [[0, D]];
+    else {
+      const a = Math.min(D, Math.max(0, canal[0]));
+      const b = Math.min(D, Math.max(0, canal[1]));
+      ys = [];
+      if (a > 1e-9) ys.push([0, a]);
+      if (D - b > 1e-9) ys.push([b, D]);
+    }
+    faixas.push({ z0, z1, xs, ys });
+  }
 
   const tris = [];
+  const vazia = { xs: [], ys: [] };
+  // Um quadrilátero por plano, com o giro que põe a normal pro lado certo.
+  const emZ = (x0, x1, y0, y1, z, pra) => {
+    const q = [[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]];
+    if (pra < 0) q.reverse();
+    tris.push([q[0], q[1], q[2]], [q[0], q[2], q[3]]);
+  };
+  const emX = (y0, y1, z0, z1, x, pra) => {
+    const q = [[x, y0, z0], [x, y1, z0], [x, y1, z1], [x, y0, z1]];
+    if (pra < 0) q.reverse();
+    tris.push([q[0], q[1], q[2]], [q[0], q[2], q[3]]);
+  };
+  const emY = (x0, x1, z0, z1, y, pra) => {
+    const q = [[x0, y, z0], [x0, y, z1], [x1, y, z1], [x1, y, z0]];
+    if (pra < 0) q.reverse();
+    tris.push([q[0], q[1], q[2]], [q[0], q[2], q[3]]);
+  };
 
-  for (let j = 0; j < L; j++) {
-    const linhas = corridas(mascara[j]);
-    if (!linhas.length) continue;
-
-    // altura da faixa: linha 0 é o topo da peça
-    const z0 = (L - 1 - j) * e, z1 = z0 + e;
-    // dentro da faixa, o Z mais perto do centro do canal — assim o furo nunca
-    // sai menor do que o lápis precisa
-    const zc = op.furoZ;
-    const perto = Math.max(z0, Math.min(z1, zc));
-    const canal = canalEmY(cfg, perto - zc);
-
-    for (const [c0, c1] of linhas) {
-      const [f0, f1] = bordasFinas(c0, c1, cobertura && cobertura[j]);
-      const x0 = f0 * e, x1 = f1 * e;
-      if (!canal) { caixa(tris, x0, 0, z0 - ov, x1, D, z1 + ov); continue; }
-      const [ya, yb] = canal;
-      if (ya > 0.001) caixa(tris, x0, 0, z0 - ov, x1, Math.min(ya, D), z1 + ov);
-      if (yb < D - 0.001) caixa(tris, x0, Math.max(yb, 0), z0 - ov, x1, D, z1 + ov);
+  for (let k = 0; k < L; k++) {
+    const f = faixas[k];
+    if (!f.xs.length) continue;
+    // paredes laterais e as faces de frente, de trás e do canal
+    for (const [x0, x1] of f.xs) {
+      for (const [y0, y1] of f.ys) {
+        emX(y0, y1, f.z0, f.z1, x0, -1);
+        emX(y0, y1, f.z0, f.z1, x1, +1);
+        emY(x0, x1, f.z0, f.z1, y0, -1);
+        emY(x0, x1, f.z0, f.z1, y1, +1);
+      }
     }
+  }
+
+  // Piso e teto de cada faixa: só onde a faixa vizinha NÃO acompanha. É aqui
+  // que a peça fecha quando a letra muda de largura ou o canal muda de altura.
+  for (let k = 0; k <= L; k++) {
+    const baixo = k > 0 ? faixas[k - 1] : vazia;
+    const cima = k < L ? faixas[k] : vazia;
+    if (!baixo.xs.length && !cima.xs.length) continue;
+    const z = k > 0 ? baixo.z1 : cima.z0;
+
+    for (const [x0, x1] of intersecao(baixo.xs, cima.xs)) {
+      for (const [y0, y1] of diferenca(baixo.ys, cima.ys)) emZ(x0, x1, y0, y1, z, +1);
+      for (const [y0, y1] of diferenca(cima.ys, baixo.ys)) emZ(x0, x1, y0, y1, z, -1);
+    }
+    for (const [x0, x1] of diferenca(baixo.xs, cima.xs))
+      for (const [y0, y1] of baixo.ys) emZ(x0, x1, y0, y1, z, +1);
+    for (const [x0, x1] of diferenca(cima.xs, baixo.xs))
+      for (const [y0, y1] of cima.ys) emZ(x0, x1, y0, y1, z, -1);
+  }
+
+  let vol = 0;
+  for (const f of faixas) {
+    let lx = 0, ly = 0;
+    for (const [a, b] of f.xs) lx += b - a;
+    for (const [a, b] of f.ys) ly += b - a;
+    vol += lx * ly * e;
   }
 
   // Quanto do comprimento do lápis fica abraçado pela peça. É o que segura: a
@@ -210,8 +297,7 @@ export function nomeNoLapis(op, mascara, cobertura) {
     altura: L * e,
     profundidade: D,
     furoY,
-    caixas: tris.length / 12,
     aperto: cobertos / C,
-    volume: volume(tris) / 1000,
+    volume: vol / 1000,
   };
 }

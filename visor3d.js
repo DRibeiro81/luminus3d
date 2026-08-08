@@ -68,12 +68,15 @@ export function criarVisor(canvas, opcoes = {}) {
   gl.enable(gl.DEPTH_TEST);
 
   const bufPos = gl.createBuffer(), bufNor = gl.createBuffer(), bufEsp = gl.createBuffer();
-  let nVerts = 0, alcance = 100, centroZ = 0;
+  let nVerts = 0, alcance = 100, centro = [0, 0, 0], tamanho = [100, 100, 100];
   let modo = 0, espMin = 0, espMax = 1;
   // Giro inicial: o vaso abre num três-quartos; a litofania precisa nascer
   // olhando o MEIO da foto, senão o rosto fica atrás e parece que não funcionou.
   let giro = opcoes.giroInicial !== undefined ? opcoes.giroInicial : -0.6;
-  let inclina = -1.15, dist = 3.0;
+  // `dist` é múltiplo da maior medida da peça. Peça alta e estreita cabe com 3;
+  // peça larga e baixa, como um nome deitado, some na tela nessa distância.
+  let inclina = opcoes.inclinaInicial !== undefined ? opcoes.inclinaInicial : -1.15;
+  let dist = opcoes.distInicial !== undefined ? opcoes.distInicial : 3.0;
   let arrastando = false, ax = 0, ay = 0;
 
   /* matrizes 4x4 em coluna: o mínimo pra montar a câmera */
@@ -140,7 +143,11 @@ export function criarVisor(canvas, opcoes = {}) {
         let mx = s[0], my = s[1], mz = s[2];
         const mm = Math.hypot(mx, my, mz) || 1;
         mx /= mm; my /= mm; mz /= mm;
-        if (mx * fx + my * fy + mz * fz < 0.55) { mx = fx; my = fy; mz = fz; }
+        // 0,85 ≈ 32°. Com 0,55 (57°) uma quina reta passava por curva: o
+        // vértice do canto da face da frente misturava a normal dela com a da
+        // parede lateral, e a peça de texto — que é toda quina reta — saía
+        // parecendo um monte de tubos empilhados em vez de uma frente lisa.
+        if (mx * fx + my * fy + mz * fz < 0.85) { mx = fx; my = fy; mz = fz; }
         pos[i] = p[0]; pos[i + 1] = p[1]; pos[i + 2] = p[2];
         nor[i] = mx; nor[i + 1] = my; nor[i + 2] = mz;
         esp[e] = espessuras ? espessuras[e] : 0;
@@ -150,7 +157,11 @@ export function criarVisor(canvas, opcoes = {}) {
 
     nVerts = n * 3;
     alcance = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]) || 100;
-    centroZ = (max[2] + min[2]) / 2;
+    // Centra nos TRÊS eixos. O vaso já nasce em volta do eixo, mas peça montada
+    // a partir de imagem nasce no canto — sem isso ela gira em torno de um
+    // ponto fora dela e sai da tela ao primeiro arrasto.
+    centro = [(max[0] + min[0]) / 2, (max[1] + min[1]) / 2, (max[2] + min[2]) / 2];
+    tamanho = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
     gl.bindBuffer(gl.ARRAY_BUFFER, bufPos); gl.bufferData(gl.ARRAY_BUFFER, pos, gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, bufNor); gl.bufferData(gl.ARRAY_BUFFER, nor, gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, bufEsp); gl.bufferData(gl.ARRAY_BUFFER, esp, gl.STATIC_DRAW);
@@ -172,9 +183,31 @@ export function criarVisor(canvas, opcoes = {}) {
     gl.clearColor(fundo[0], fundo[1], fundo[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    const mv = mult(mover(0, 0, -alcance * dist),
-                mult(rotX(inclina), mult(rotZ(giro), mover(0, 0, -centroZ))));
-    const mvp = mult(perspectiva(0.6, canvas.width / canvas.height, alcance * 0.05, alcance * 20), mv);
+    // Enquadrar de verdade: a distância vem da largura E da altura da peça
+    // contra a abertura da lente. Sem isso, peça comprida e baixa (um nome
+    // deitado) fica minúscula no meio da tela, porque a conta usava só a maior
+    // medida dela.
+    // Lente. 0,6 rad é o padrão do vaso. Peça comprida precisa de lente mais
+    // fechada: com a aberta, a abertura horizontal passa de 90° e a perspectiva
+    // estica as pontas a ponto da gente enxergar por dentro das letras.
+    const fov = opcoes.fov || 0.6;
+    const t = Math.tan(fov / 2);
+    const asp = canvas.width / canvas.height;
+    const base = opcoes.enquadrar
+      ? Math.max(tamanho[0] / 2 / (t * asp), tamanho[2] / 2 / t) * 1.12
+      : alcance;
+    const camera = base * dist;
+
+    const mv = mult(mover(0, 0, -camera),
+                mult(rotX(inclina), mult(rotZ(giro), mover(-centro[0], -centro[1], -centro[2]))));
+    // Perto e longe colados na peça. Com near = 5% e far = 20× da medida, a
+    // precisão do buffer de profundidade some e superfícies que se encostam na
+    // mesma profundidade piscam uma por cima da outra — na peça de texto isso
+    // saía como uma listra por faixa da malha.
+    const raio = Math.hypot(tamanho[0], tamanho[1], tamanho[2]) / 2;
+    const perto = Math.max(camera * 0.02, camera - raio * 1.2);
+    const longe = camera + raio * 2.5;
+    const mvp = mult(perspectiva(fov, asp, perto, longe), mv);
     gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'mvp'), false, mvp);
     gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'mv'), false, mv);
     gl.uniform1i(gl.getUniformLocation(prog, 'modo'), modo);
@@ -206,10 +239,17 @@ export function criarVisor(canvas, opcoes = {}) {
   });
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
-    dist = Math.max(1.2, Math.min(8, dist * (1 + e.deltaY * 0.001)));
+    dist = Math.max(0.5, Math.min(8, dist * (1 + e.deltaY * 0.001)));
     desenhar();
   }, { passive: false });
   window.addEventListener('resize', desenhar);
+  // O canvas mede o espaço na hora de desenhar. Se ele desenhou antes do layout
+  // assentar, o buffer fica num tamanho e o CSS estica pra outro — a peça sai
+  // achatada e cortada nas pontas, parecendo distorção de lente. Redesenhar
+  // quando o espaço muda resolve, e é barato: só dispara quando muda mesmo.
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => desenhar()).observe(canvas);
+  }
 
   return { ok: true, enviar, desenhar, ajustar };
 }
