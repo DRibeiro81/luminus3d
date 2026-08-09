@@ -672,3 +672,32 @@ export function afinar(m, limite = 40) {
   }
   return a;
 }
+
+/** Amplia a máscara por um fator inteiro, repetindo célula. */
+export function ampliar(m, k) {
+  if (k <= 1) return m;
+  const L = m.length, C = m[0].length;
+  const saida = [];
+  for (let j = 0; j < L * k; j++) {
+    const linha = new Uint8Array(C * k);
+    const src = m[(j / k) | 0];
+    for (let i = 0; i < C * k; i++) linha[i] = src[(i / k) | 0];
+    saida.push(linha);
+  }
+  return saida;
+}
+
+/**
+ * Fecha as lacunas de um mapa de bordas: engorda e encolhe de volta.
+ *
+ * Borda achada por diferença de cor sai picotada onde o desenho tem
+ * antisserrilhado ou sombra suave. Sem fechar antes de afinar, o traço vira
+ * tracejado: os pedaços curtos caem no filtro de detalhe e sobram só riscos
+ * soltos.
+ */
+export function fecharLacunas(m, n) {
+  if (n <= 0) return m;
+  let x = engordar(m, n);
+  for (let k = 0; k < n; k++) x = encolher(x);
+  return x;
+}

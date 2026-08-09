@@ -220,7 +220,7 @@
 <script type="module">
 import { montarPorContorno, montarCarimbo, maiorPedaco, preencherFuros, suavizar,
          borrar, contornos, suavizarLinha, decimar, mover, espelhar, semBorda,
-         filtrarPequenos, afinar } from './cortador.js';
+         filtrarPequenos, afinar, ampliar, fecharLacunas } from './cortador.js';
 import { engordar, encolher } from './texto.js';
 
 /** Largura em X que uma malha ocupa, pra pôr a peça seguinte ao lado. */
@@ -473,6 +473,10 @@ function calcular() {
   if ($('temCarimbo').checked) {
     const recuo = op.espessuraLamina / 2 + +$('folga').value + 0.8;
     let md = mascaraDetalhes(s, recuo);
+    // Fecha o picotado antes de afinar. Borda por diferença de cor sai quebrada
+    // onde o desenho tem antisserrilhado, e afinar em cima disso entrega
+    // tracejado em vez de linha.
+    if (md) md = fecharLacunas(md, 2);
     // Vira traço de caneta: afina tudo até uma linha só e engorda de volta na
     // espessura pedida. Assim mancha cheia e linha fina saem iguais, e some a
     // necessidade de ficar compensando espessura em três controles.
@@ -483,14 +487,21 @@ function calcular() {
     if (md && minimo > 1) md = filtrarPequenos(md, minimo);
     const grosso = Math.max(0, Math.round((+$('traco').value - op.mmPorCelula) / 2 / op.mmPorCelula));
     if (md && grosso > 0) md = engordar(md, grosso);
-    // SEM borrão. O borrão existe pra dar precisão abaixo da célula no contorno
-    // da figura, que é grande; num traço de caneta de uma ou duas células ele
-    // derruba o valor abaixo da metade e a linha simplesmente não é encontrada.
-    // Resultado: quanto mais fina a caneta, mais traço sumia. Quem alisa a
-    // curva aqui é o Chaikin, que não apaga nada.
-    const laçosDet = md ? contornos(preencherFuros(md).map((l) => Float32Array.from(l)))
-      .map((l) => decimar(suavizarLinha(l, 2), 0.9))
-      .filter((l) => l.length > 12) : [];
+    // O traçado precisa de borrão pra não sair em escada, mas borrão come linha
+    // fina. A saída é AMPLIAR a grade só do traço: com a caneta ocupando umas
+    // seis células, o borrão alisa sem apagar. As coordenadas voltam divididas
+    // pelo mesmo fator.
+    let laçosDet = [];
+    if (md) {
+      const larguraCel = Math.max(1, +$('traco').value / op.mmPorCelula);
+      const k = Math.max(1, Math.min(4, Math.ceil(6 / larguraCel)));
+      const grande = ampliar(preencherFuros(md), k);
+      // borrão de raio 1 SEMPRE: depois de ampliar, a caneta já ocupa uma
+      // dezena de células, e raio proporcional ao fator voltaria a apagá-la
+      laçosDet = contornos(borrar(grande, 1))
+        .map((l) => decimar(suavizarLinha(l.map(([x, y]) => [x / k, y / k]), 2), 0.7))
+        .filter((l) => l.length > 12);
+    }
     if (laçosDet.length) {
       carimbo = montarCarimbo({
         mmPorCelula: op.mmPorCelula, folga: +$('folga').value,
