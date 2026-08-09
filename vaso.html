@@ -244,6 +244,7 @@
     <div>Peças<b id="dPecas">—</b></div>
     <div>Triângulos<b id="dTris">—</b></div>
     <div>Filamento<b id="dPeso">—</b></div>
+    <div style="margin-left:auto"><a id="elCalc" href="calculadora.html" style="color:var(--destaque);text-decoration:none;font-weight:600;font-size:12px">Calcular preço &rsaquo;</a></div>
   </div>
   <div id="aviso"></div>
 </main>
@@ -327,6 +328,8 @@ function recalcular() {
   $("dPecas").textContent = r.nRipas ? `${r.nRipas} ripas` : "1";
   $("dTris").textContent = r.tris.length.toLocaleString("pt-BR");
   $("dPeso").textContent = `~${Math.round(r.volume * DENSIDADE)} g`;
+  // o vaso não estima tempo: vai só o peso
+  $("elCalc").href = `calculadora.html?peso=${(r.volume * DENSIDADE).toFixed(1)}`;
 
   const av = [];
   if (r.avisos) av.push(...r.avisos);

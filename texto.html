@@ -198,6 +198,7 @@
     <div>Tempo<b id="dTempo">—</b></div>
     <div>Troca de cor<b id="dTroca">—</b></div>
     <div>Arquivo<b id="dArq">—</b></div>
+    <div style="margin-left:auto"><a id="elCalc" href="calculadora.html" style="color:var(--destaque);text-decoration:none;font-weight:600;font-size:12px">Calcular preço &rsaquo;</a></div>
   </div>
   <div id="aviso"></div>
 </main>
@@ -465,6 +466,7 @@ function mostrar(r) {
   const g = r.volume * DENSIDADE;
   $('dPeso').textContent = `~${g.toFixed(1)} g`;
   $('dTempo').textContent = `~${Math.max(1, Math.round(g / 0.18))} min`;
+  $('elCalc').href = `calculadora.html?peso=${g.toFixed(1)}&horas=${(g / 0.18 / 60).toFixed(2)}`;
   $('dTroca').textContent = r.trocaDeCor > 0 ? `${n(r.trocaDeCor)} mm` : 'uma cor só';
   $('dicaImpressao').innerHTML = r.trocaDeCor > 0
     ? `Imprima <b>deitado</b>, com a frente das letras na mesa. No fatiador, ponha uma <b>troca de filamento em ${n(r.trocaDeCor)} mm</b>: até ali é a cor da letra, depois é a do corpo.`

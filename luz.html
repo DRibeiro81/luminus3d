@@ -230,6 +230,7 @@
     <div>Filamento<b id="dPeso">—</b></div>
     <div>Tempo<b id="dTempo">—</b></div>
     <div>Arquivo<b id="dArq">—</b></div>
+    <div style="margin-left:auto"><a id="elCalc" href="calculadora.html" style="color:var(--destaque);text-decoration:none;font-weight:600;font-size:12px">Calcular preço &rsaquo;</a></div>
   </div>
   <div id="aviso"></div>
 </main>
@@ -437,6 +438,10 @@ function mostrarDados(r) {
   $('dPeso').textContent = `~${Math.round(gPainel + (r.pe ? r.pe.volume * DENSIDADE : 0))} g`;
   // Camada de 0,1 mm e parede cheia: na prática rende perto de 9 g por hora.
   $('dTempo').textContent = `~${(gPainel / 9).toFixed(1)} h`;
+  {
+    const g = gPainel + (r.pe ? r.pe.volume * DENSIDADE : 0);
+    $('elCalc').href = `calculadora.html?peso=${g.toFixed(1)}&horas=${(gPainel / 9).toFixed(1)}`;
+  }
 
   const av = [];
   if (r.espessuraMin < 0.6) av.push('Parte clara fina demais: abaixo de 0,6 mm a placa fica translúcida demais e frágil.');

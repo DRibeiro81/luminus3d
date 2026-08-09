@@ -290,6 +290,7 @@
     <div>Folga<b id="dFolga">—</b></div>
     <div>Resistência<b id="dForca">—</b></div>
     <div>Filamento<b id="dPeso">—</b></div>
+    <div style="margin-left:auto"><a id="elCalc" href="calculadora.html" style="color:var(--destaque);text-decoration:none;font-weight:600;font-size:12px">Calcular preço &rsaquo;</a></div>
   </div>
   <div id="aviso"></div>
 </main>
@@ -598,6 +599,8 @@ function mostrarDados(r) {
   const o = r.op;
   $('dTam').textContent = `${Math.round(r.largura)} × ${Math.round(r.alturaTotal)} mm`;
   $('dPeso').textContent = `~${Math.round(r.volume * DENSIDADE_PLA)} g`;
+  // o quadro não estima tempo: vai só o peso, e o tempo o dono põe do fatiador
+  $('elCalc').href = `calculadora.html?peso=${(r.volume * DENSIDADE_PLA).toFixed(1)}`;
 
   const av = [];
   $('dFormas').textContent = `${r.info.qtd} linhas`;
