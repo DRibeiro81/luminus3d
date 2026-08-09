@@ -416,8 +416,12 @@ export function montarPorContorno(op, laços) {
       if (bruto.length < 9) continue;
       const fora = areaComSinal(bruto) > 0 ? 1 : -1;
       const porFora = deslocarLinha(bruto, meia + op.larguraAba, e, fora);
-      // entra um tico a mais que a lâmina: encostar exato faz malha não-manifold
-      const porDentro = deslocarLinha(bruto, -(meia + 0.2), e, fora);
+      // O furo da aba fica ENTERRADO na lâmina, não além dela. Sólidos não podem
+      // se encostar exato (vira malha não-manifold), e da primeira vez eu
+      // resolvi isso entrando 0,2 mm a mais — o que deixou um degrau de aba
+      // aparecendo por dentro do cortador. Recuando 0,2 mm, a sobreposição
+      // acontece igual e a borda da aba some dentro do material da lâmina.
+      const porDentro = deslocarLinha(bruto, -Math.max(0.1, meia - 0.2), e, fora);
       const t = [];
       prisma(t, porFora, e, 0, op.alturaAba, [porDentro]);
       anexar(tris, fechar(t));
