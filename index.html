@@ -3,131 +3,328 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Luminus 3D — sua foto vira peça</title>
-<meta name="description" content="Transforme uma foto ou um nome em peça impressa em 3D: quadro de linhas, luminária que revela a foto na luz, vaso, abajur e nome no lápis.">
+<title>Luminus 3D — soluções para o mundo 3D</title>
+<meta name="description" content="Aplicativos, modelagem e impressão 3D. Transforme foto, nome ou ideia em peça pronta pra imprimir, direto no navegador.">
 <style>
+  /* ------------------------------------------------------------------
+     Estrutura no ritmo das páginas de produto da Apple: barra fina fixa no
+     topo, herói de tela cheia e seções de uma ideia por vez, com muito
+     respiro. O código e o texto são nossos — o que veio de lá é só a ordem
+     das seções e a escala de tipografia.
+     ------------------------------------------------------------------ */
   :root {
-    --bg: #14161a; --painel: #1c1f25; --linha: #2b3038;
-    --texto: #e7eaef; --fraco: #8b93a1; --destaque: #d9a441;
+    --bg: #12141a; --painel: #1a1d24; --linha: #2b3038;
+    --texto: #f2f4f7; --fraco: #98a0ad; --ouro: #d9a441; --ouro-claro: #f0c470;
+    --topo: 52px;
   }
   * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
   body {
     margin: 0; background: var(--bg); color: var(--texto);
-    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    -webkit-font-smoothing: antialiased;
+    font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased; overflow-x: hidden;
   }
-  .dentro { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+  a { color: inherit; }
+  .dentro { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+  .estreito { max-width: 760px; margin: 0 auto; padding: 0 24px; }
 
-  header { padding: 72px 0 48px; text-align: center; }
-  .marca {
-    font-size: 13px; letter-spacing: .22em; text-transform: uppercase;
-    color: var(--destaque); margin: 0 0 14px;
+  /* ---- barra fixa ---- */
+  nav {
+    position: sticky; top: 0; z-index: 50; height: var(--topo);
+    background: rgba(18, 20, 26, .78); backdrop-filter: saturate(160%) blur(18px);
+    border-bottom: 1px solid rgba(255, 255, 255, .07);
   }
-  h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.15; margin: 0 0 16px; font-weight: 700; }
-  h1 b { color: var(--destaque); font-weight: 700; }
-  header p { max-width: 560px; margin: 0 auto; color: var(--fraco); font-size: 17px; }
+  nav .dentro { display: flex; align-items: center; gap: 26px; height: 100%; }
+  nav img { height: 20px; width: auto; display: block; }
+  nav .elos { display: flex; gap: 24px; margin-left: auto; font-size: 13px; color: var(--fraco); }
+  nav .elos a { text-decoration: none; transition: color .15s; }
+  nav .elos a:hover { color: var(--texto); }
+  @media (max-width: 720px) { nav .elos a:nth-child(n+4) { display: none; } }
 
-  /* Dois por linha: com quatro peças, 3+1 deixa um buraco na segunda fila. */
-  .grade {
-    display: grid; gap: 22px; padding-bottom: 56px;
-    grid-template-columns: repeat(2, 1fr);
-    max-width: 860px; margin: 0 auto;
-  }
-  @media (max-width: 700px) { .grade { grid-template-columns: 1fr; } }
-  .cartao {
-    display: flex; flex-direction: column; text-decoration: none; color: inherit;
-    background: var(--painel); border: 1px solid var(--linha); border-radius: 16px;
-    overflow: hidden; transition: border-color .18s, transform .18s;
-  }
-  .cartao:hover, .cartao:focus-visible {
-    border-color: var(--destaque); transform: translateY(-3px); outline: none;
-  }
-  /* As peças têm proporções bem diferentes (um quadro, um abajur em pé, um nome
-     deitado). Altura fixa e `contain` deixa todas do mesmo tamanho sem cortar
-     nem esticar nenhuma. */
-  .foto {
-    height: 210px; background: #0f1114; display: flex;
-    align-items: center; justify-content: center; padding: 14px;
-    border-bottom: 1px solid var(--linha);
-  }
-  .foto img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
-  .txt { padding: 18px 20px 22px; flex: 1; display: flex; flex-direction: column; }
-  .txt h2 { font-size: 19px; margin: 0 0 6px; }
-  .txt p { margin: 0 0 14px; color: var(--fraco); font-size: 14.5px; flex: 1; }
-  .abrir { color: var(--destaque); font-size: 14px; font-weight: 600; }
-  .abrir::after { content: ' →'; }
+  /* ---- tipografia grande ---- */
+  h1 { font-size: clamp(40px, 8.4vw, 92px); line-height: 1.03; letter-spacing: -.03em;
+       margin: 0 0 20px; font-weight: 700; }
+  h2 { font-size: clamp(30px, 5vw, 54px); line-height: 1.08; letter-spacing: -.025em;
+       margin: 0 0 18px; font-weight: 700; }
+  h3 { font-size: clamp(22px, 3vw, 30px); line-height: 1.15; letter-spacing: -.02em; margin: 0 0 12px; }
+  .ouro { color: var(--ouro); }
+  .cabeca { font-size: 13px; letter-spacing: .2em; text-transform: uppercase;
+            color: var(--ouro); margin: 0 0 16px; font-weight: 600; }
+  .conduz { font-size: clamp(17px, 2.2vw, 22px); color: var(--fraco); max-width: 620px; }
 
-  footer {
-    border-top: 1px solid var(--linha); padding: 26px 0 48px;
-    color: var(--fraco); font-size: 13.5px; text-align: center;
-  }
+  /* ---- botões ---- */
+  .botoes { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 32px; }
+  .bt { display: inline-block; padding: 13px 26px; border-radius: 980px; text-decoration: none;
+        font-size: 15px; font-weight: 600; transition: transform .15s, background .15s; }
+  .bt:hover { transform: translateY(-1px); }
+  .cheio { background: var(--ouro); color: #17120a; }
+  .cheio:hover { background: var(--ouro-claro); }
+  .vazio { border: 1px solid var(--linha); color: var(--texto); }
+  .vazio:hover { border-color: var(--ouro); color: var(--ouro); }
 
-  @media (max-width: 560px) {
-    header { padding: 48px 0 32px; }
-    .foto { height: 170px; }
+  /* ---- herói ---- */
+  header.heroi {
+    min-height: calc(100svh - var(--topo)); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    padding: 60px 0 80px; position: relative; overflow: hidden;
+  }
+  /* halo quente atrás do nome: a marca se chama Luminus */
+  header.heroi::before {
+    content: ''; position: absolute; top: 16%; left: 50%; transform: translateX(-50%);
+    width: min(900px, 130vw); aspect-ratio: 1; border-radius: 50%;
+    background: radial-gradient(circle, rgba(217, 164, 65, .16), transparent 62%);
+    pointer-events: none;
+  }
+  header.heroi > * { position: relative; }
+  header.heroi .marca { width: min(430px, 74vw); margin-bottom: 40px; border-radius: 10px; }
+
+  /* ---- seções ---- */
+  section { padding: clamp(80px, 12vh, 140px) 0; }
+  .fita { border-top: 1px solid var(--linha); }
+
+  .tres { display: grid; gap: 20px; grid-template-columns: repeat(3, 1fr); margin-top: 48px; }
+  @media (max-width: 820px) { .tres { grid-template-columns: 1fr; } }
+  .cartao { background: var(--painel); border: 1px solid var(--linha); border-radius: 20px;
+            padding: 30px 28px; }
+  .cartao h3 { font-size: 21px; margin-bottom: 10px; }
+  .cartao p { color: var(--fraco); font-size: 15.5px; margin: 0; }
+  .num { font-size: 12px; letter-spacing: .16em; color: var(--ouro); font-weight: 700;
+         margin: 0 0 10px; }
+
+  /* ---- blocos de aplicativo, alternados ---- */
+  .app { display: grid; gap: clamp(28px, 5vw, 64px); align-items: center;
+         grid-template-columns: 1fr 1fr; padding: clamp(56px, 8vh, 96px) 0; }
+  .app:nth-of-type(even) .arte { order: 2; }
+  @media (max-width: 860px) {
+    .app { grid-template-columns: 1fr; }
+    .app:nth-of-type(even) .arte { order: 0; }
+  }
+  .arte { background: #0d0f13; border: 1px solid var(--linha); border-radius: 22px;
+          aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center;
+          padding: 22px; overflow: hidden; }
+  .arte img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  .app p { color: var(--fraco); margin: 0 0 22px; }
+  .saiba { color: var(--ouro); text-decoration: none; font-weight: 600; font-size: 15px; }
+  .saiba::after { content: ' ›'; }
+
+  /* ---- números ---- */
+  .placar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; text-align: center; }
+  @media (max-width: 760px) { .placar { grid-template-columns: repeat(2, 1fr); } }
+  .placar b { display: block; font-size: clamp(28px, 4.4vw, 44px); letter-spacing: -.03em;
+              color: var(--ouro); line-height: 1.05; margin-bottom: 6px; }
+  .placar span { color: var(--fraco); font-size: 14px; }
+
+  .chamada { text-align: center; }
+
+  footer { border-top: 1px solid var(--linha); padding: 54px 0 64px;
+           font-size: 13.5px; color: var(--fraco); }
+  .colunas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; margin-bottom: 38px; }
+  @media (max-width: 760px) { .colunas { grid-template-columns: repeat(2, 1fr); } }
+  .colunas h4 { color: var(--texto); font-size: 13px; margin: 0 0 12px; }
+  .colunas a { display: block; text-decoration: none; margin-bottom: 8px; transition: color .15s; }
+  .colunas a:hover { color: var(--ouro); }
+  .rodape-fim { border-top: 1px solid var(--linha); padding-top: 22px; }
+
+  /* ---- aparecer ao rolar ---- */
+  .surge { opacity: 0; transform: translateY(22px); transition: opacity .7s, transform .7s; }
+  .surge.vista { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .surge { opacity: 1; transform: none; transition: none; }
   }
 </style>
 </head>
 <body>
 
-<div class="dentro">
-  <header>
-    <p class="marca">Luminus 3D</p>
-    <h1>Sua foto vira <b>peça de verdade</b></h1>
-    <p>Escolha o que você quer criar, envie a foto ou escreva o nome, e baixe o
-      arquivo pronto pra imprimir.</p>
-  </header>
+<nav>
+  <div class="dentro">
+    <a href="#topo"><img src="img/logo-luminus.png" alt="Luminus 3D"></a>
+    <div class="elos">
+      <a href="#aplicativos">Aplicativos</a>
+      <a href="#modelagem">Modelagem</a>
+      <a href="#impressao">Impressão</a>
+      <a href="#contato">Falar com a gente</a>
+    </div>
+  </div>
+</nav>
 
-  <main class="grade">
-    <a class="cartao" href="app.html">
-      <div class="foto"><img src="img/retrato-em-linhas.png"
-        alt="Quadro de linhas: de perto são riscos, de longe aparece a imagem"></div>
-      <div class="txt">
-        <h2>Retrato em Linhas</h2>
-        <p>De perto são só linhas. Dá dois passos pra trás e a foto aparece.
-          Um quadro que muda conforme você se aproxima.</p>
-        <span class="abrir">Criar o meu</span>
-      </div>
-    </a>
+<header class="heroi" id="topo">
+  <img class="marca" src="img/logo-luminus.png" alt="Luminus 3D">
+  <div class="estreito">
+    <h1>O mundo 3D,<br><span class="ouro">sem curva de aprendizado.</span></h1>
+    <p class="conduz" style="margin: 0 auto;">Aplicativos, modelagem e impressão. Você manda uma
+      foto ou escreve um nome; a gente devolve a peça pronta pra imprimir.</p>
+    <div class="botoes" style="justify-content: center;">
+      <a class="bt cheio" href="#aplicativos">Ver os aplicativos</a>
+      <a class="bt vazio" href="#contato">Pedir um projeto</a>
+    </div>
+  </div>
+</header>
 
-    <a class="cartao" href="luz.html">
-      <div class="foto"><img src="img/foto-magica.png"
-        alt="Quadro de luz aceso sobre um móvel, com a foto de uma família aparecendo"></div>
-      <div class="txt">
-        <h2>Foto Mágica</h2>
-        <p>Apagada, parece uma placa branca. Acendeu a luz atrás, a foto aparece
-          inteira. Vira quadro de mesa ou abajur.</p>
-        <span class="abrir">Criar o meu</span>
-      </div>
-    </a>
+<section class="fita">
+  <div class="dentro surge">
+    <p class="cabeca">O que fazemos</p>
+    <h2>Três frentes, um mundo só.</h2>
+    <p class="conduz">Tudo o que existe entre uma ideia e uma peça na mão.</p>
 
-    <a class="cartao" href="vaso.html">
-      <div class="foto"><img src="img/vaso-e-abajur.png"
-        alt="Vaso de barriga larga com gomos torcidos em espiral"></div>
-      <div class="txt">
-        <h2>Vaso e Abajur</h2>
-        <p>Vaso com gomos e torção, cúpula de luminária e base, no tamanho que
-          você quiser. A parede vazada desenha a luz na sala.</p>
-        <span class="abrir">Criar o meu</span>
+    <div class="tres">
+      <div class="cartao">
+        <p class="num">01</p>
+        <h3>Aplicativos</h3>
+        <p>Ferramentas que rodam no navegador, sem instalar nada e sem assinatura.
+          Quem usa não precisa saber modelar.</p>
       </div>
-    </a>
+      <div class="cartao">
+        <p class="num">02</p>
+        <h3>Modelagem</h3>
+        <p>Peça sob medida, desenhada do zero ou a partir do que você já tem.
+          Sai em arquivo fechado, pronto pra fatiar.</p>
+      </div>
+      <div class="cartao">
+        <p class="num">03</p>
+        <h3>Impressão</h3>
+        <p>Da unidade ao lote. A gente imprime, confere e entrega — ou te passa o
+          arquivo com os ajustes certos pra você imprimir.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
-    <a class="cartao" href="texto.html">
-      <div class="foto"><img src="img/lapis-com-nome.png"
-        alt="Peça laranja com o nome GAEL em letras brancas, encaixada no lápis"></div>
-      <div class="txt">
-        <h2>Lápis com Nome</h2>
-        <p>O nome da criança em letras gordas, encaixado no lápis.
-          Ninguém mais troca o material na escola.</p>
-        <span class="abrir">Criar o meu</span>
+<section class="fita" id="aplicativos">
+  <div class="dentro">
+    <div class="surge">
+      <p class="cabeca">Aplicativos</p>
+      <h2>Quatro ferramentas.<br>Nenhuma instalação.</h2>
+      <p class="conduz">Abre no navegador, carrega a foto, ajusta e baixa o arquivo.
+        O cálculo acontece na sua máquina — nada sobe pra servidor nenhum.</p>
+    </div>
+
+    <div class="app surge">
+      <div class="arte"><img src="img/retrato-em-linhas.png"
+        alt="Quadro de linhas em que a imagem aparece quando você se afasta"></div>
+      <div>
+        <h3>Retrato em Linhas</h3>
+        <p>De perto são só linhas. Dá dois passos pra trás e a foto aparece. Um quadro
+          que muda conforme você se aproxima.</p>
+        <a class="saiba" href="app.html">Criar o meu</a>
       </div>
-    </a>
-  </main>
-</div>
+    </div>
+
+    <div class="app surge">
+      <div class="arte"><img src="img/foto-magica.png"
+        alt="Quadro de luz aceso mostrando a foto de uma família"></div>
+      <div>
+        <h3>Foto Mágica</h3>
+        <p>Apagada, parece uma placa branca. Acendeu a luz atrás, a foto aparece inteira,
+          em tom contínuo. Vira quadro de mesa ou abajur.</p>
+        <a class="saiba" href="luz.html">Criar o meu</a>
+      </div>
+    </div>
+
+    <div class="app surge">
+      <div class="arte"><img src="img/vaso-e-abajur.png"
+        alt="Vaso com gomos torcidos em espiral"></div>
+      <div>
+        <h3>Vaso e Abajur</h3>
+        <p>Vaso com gomos e torção, cúpula de luminária e base, no tamanho que você quiser.
+          A parede vazada desenha a luz na sala.</p>
+        <a class="saiba" href="vaso.html">Criar o meu</a>
+      </div>
+    </div>
+
+    <div class="app surge">
+      <div class="arte"><img src="img/lapis-com-nome.png"
+        alt="Peça laranja com o nome GAEL encaixada no lápis"></div>
+      <div>
+        <h3>Lápis com Nome</h3>
+        <p>O nome da criança em letras gordas, encaixado no lápis. Com contorno de duas
+          cores, numa peça só, com uma troca de filamento.</p>
+        <a class="saiba" href="texto.html">Criar o meu</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="fita" id="modelagem">
+  <div class="dentro surge">
+    <p class="cabeca">Modelagem</p>
+    <h2>Se não existe,<br>a gente desenha.</h2>
+    <p class="conduz">Peça de reposição que ninguém fabrica mais, brinde com a marca do
+      cliente, encaixe que precisa entrar com folga de décimo de milímetro. Você descreve
+      ou manda a foto; volta o arquivo fechado, medido e testado.</p>
+    <div class="botoes"><a class="bt vazio" href="#contato">Contar o que preciso</a></div>
+  </div>
+</section>
+
+<section class="fita" id="impressao">
+  <div class="dentro surge">
+    <p class="cabeca">Impressão</p>
+    <h2>Da peça única<br>ao lote.</h2>
+    <p class="conduz">A gente imprime, confere medida a medida e entrega. Se preferir
+      imprimir você mesmo, entregamos o arquivo com os ajustes certos: orientação na mesa,
+      altura de camada e onde trocar de cor.</p>
+
+    <div class="placar" style="margin-top: 60px;">
+      <div><b>4</b><span>aplicativos no ar</span></div>
+      <div><b>0,4 mm</b><span>o traço mais fino que a gente garante</span></div>
+      <div><b>STL</b><span>pronto pra fatiar, sem conversão</span></div>
+      <div><b>0</b><span>arquivos enviados pra servidor</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="fita" id="contato">
+  <div class="estreito chamada surge">
+    <h2>Vamos tirar sua ideia<br>do papel.</h2>
+    <p class="conduz" style="margin: 0 auto;">Conte o que você precisa e a gente responde com
+      o caminho mais curto: um dos aplicativos, um projeto sob medida ou a impressão pronta.</p>
+    <div class="botoes" style="justify-content: center;">
+      <a class="bt cheio" href="mailto:vetorizza@gmail.com?subject=Projeto%20Luminus%203D">Falar por e-mail</a>
+      <a class="bt vazio" href="#aplicativos">Começar pelos aplicativos</a>
+    </div>
+  </div>
+</section>
 
 <footer>
-  <div class="dentro">Luminus 3D · peças geradas no seu navegador, prontas pra fatiar e imprimir</div>
+  <div class="dentro">
+    <div class="colunas">
+      <div>
+        <h4>Aplicativos</h4>
+        <a href="app.html">Retrato em Linhas</a>
+        <a href="luz.html">Foto Mágica</a>
+        <a href="vaso.html">Vaso e Abajur</a>
+        <a href="texto.html">Lápis com Nome</a>
+      </div>
+      <div>
+        <h4>Serviços</h4>
+        <a href="#modelagem">Modelagem sob medida</a>
+        <a href="#impressao">Impressão</a>
+      </div>
+      <div>
+        <h4>Como funciona</h4>
+        <a href="#aplicativos">Roda no navegador</a>
+        <a href="#impressao">Arquivo pronto pra fatiar</a>
+      </div>
+      <div>
+        <h4>Contato</h4>
+        <a href="mailto:vetorizza@gmail.com">vetorizza@gmail.com</a>
+      </div>
+    </div>
+    <div class="rodape-fim">Luminus 3D · soluções para o mundo 3D</div>
+  </div>
 </footer>
 
+<script>
+  // As seções sobem de leve quando entram na tela. Uma vez só: reanimar a cada
+  // rolagem cansa numa página longa.
+  const olho = new IntersectionObserver((itens) => {
+    for (const it of itens) {
+      if (!it.isIntersecting) continue;
+      it.target.classList.add('vista');
+      olho.unobserve(it.target);
+    }
+  }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+  document.querySelectorAll('.surge').forEach((el) => olho.observe(el));
+</script>
 </body>
 </html>
