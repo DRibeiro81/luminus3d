@@ -648,6 +648,7 @@ function mostrar(r) {
   const av = [];
   if (r.pedacos > 1) av.push(`A peça sai em ${r.pedacos} pedaços soltos: a figura tem furo e a lâmina de dentro não fica presa em nada. Ligue "fechar os furos de dentro".`);
   if ($('temCarimbo').checked && !r.carimbo) av.push('Não achei traço nenhum dentro da figura. Suba o "quantas cores" ou baixe o "quanto detalhe".');
+  if (r.carimbo && r.carimbo.foraDaChapa > 0) av.push(`Deixei ${r.carimbo.foraDaChapa} traço(s) de fora: passavam da chapa e o carimbo não entraria na forma.`);
   if (r.denso > 0.3) av.push(`O traço já cobre ${Math.round(r.denso * 100)}% do desenho: as linhas se encostaram e vão sair como mancha. Aumente o "maior lado", afine a caneta ou suba o "quanto detalhe".`);
   if (r.paredeFina < +$('bico').value * 2) av.push(`Parede de ${n(r.paredeFina, 2)} mm é fina demais pra cortar massa. Engrosse a lâmina.`);
   if (r.silhueta.sobraram > 0) av.push(`Descartei ${r.silhueta.sobraram} mancha(s) solta(s) do fundo.`);

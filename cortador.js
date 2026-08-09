@@ -541,6 +541,22 @@ export function montarCarimbo(op, contorno, laçosDetalhe) {
   const zRelevo = op.relevo;
   const zChapa = zRelevo + op.espessuraChapa;
 
+  // Traço não pode passar da chapa. Passando, ele fica pendurado no ar e encosta
+  // na parede da lâmina — o carimbo não entra na forma. O recorte anterior era
+  // feito na máscara da silhueta, que é só uma aproximação: a suavização do
+  // contorno move a borda, e sobrava traço para fora.
+  //
+  // Aqui os dois existem de verdade, então dá pra conferir ponto a ponto.
+  const dentroDaChapa = (x, y) => {
+    let dentro = false;
+    for (let i = 0, j = chapa.length - 2; i < chapa.length - 1; j = i++) {
+      const [xi, yi] = chapa[i], [xj, yj] = chapa[j];
+      if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) dentro = !dentro;
+    }
+    return dentro;
+  };
+  const cabem = laçosDetalhe.filter((l) => l.every(([x, y]) => dentroDaChapa(x, y)));
+
   const tris = [];
   const ov = 0.2;                                   // sólidos se sobrepõem, nunca encostam
   // Cada sólido é fechado por conta própria: assim não depende de eu acertar o
@@ -548,7 +564,7 @@ export function montarCarimbo(op, contorno, laçosDetalhe) {
   // inverte a peça inteira.
   const solto = (montar) => { const t = []; montar(t); anexar(tris, fechar(t)); };
 
-  for (const l of laçosDetalhe) solto((t) => prisma(t, l, e, 0, zRelevo + ov));
+  for (const l of cabem) solto((t) => prisma(t, l, e, 0, zRelevo + ov));
   solto((t) => prisma(t, chapa, e, zRelevo, zChapa));
 
   if (op.botao > 0) {
@@ -561,7 +577,8 @@ export function montarCarimbo(op, contorno, laçosDetalhe) {
   }
 
   return { tris, altura: zChapa + (op.botao > 0 ? op.alturaBotao : 0),
-           volume: volume(tris) / 1000, detalhes: laçosDetalhe.length };
+           volume: volume(tris) / 1000, detalhes: cabem.length,
+           foraDaChapa: laçosDetalhe.length - cabem.length };
 }
 
 /**
