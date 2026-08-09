@@ -973,3 +973,32 @@ export function tintaDoDesenho(rot, C, L, minimoCelulas, magrezaCelulas, canetaC
   // caneta, e a mancha cheia não — ela já tem o tamanho que tem no desenho
   return { linhas, cheias };
 }
+
+/**
+ * Pinta o miolo de um polígono numa grade. Varredura por linha, regra par-ímpar.
+ *
+ * Serve pra recortar o traço na chapa do carimbo. Descartar o laço inteiro que
+ * passa da chapa não serve: o contorno do rosto é um laço só, e ele encosta na
+ * borda em algum ponto — sumia o desenho todo.
+ */
+export function preencherPoligono(pontos, C, L) {
+  const m = [];
+  for (let j = 0; j < L; j++) m.push(new Uint8Array(C));
+  const n = pontos.length - (pontos[0][0] === pontos[pontos.length-1][0]
+                          && pontos[0][1] === pontos[pontos.length-1][1] ? 1 : 0);
+  for (let j = 0; j < L; j++) {
+    const y = j + 0.5;
+    const cortes = [];
+    for (let i = 0, k = n - 1; i < n; k = i++) {
+      const [xi, yi] = pontos[i], [xk, yk] = pontos[k];
+      if ((yi > y) !== (yk > y)) cortes.push(xi + (y - yi) / (yk - yi) * (xk - xi));
+    }
+    cortes.sort((a, b) => a - b);
+    for (let c = 0; c + 1 < cortes.length; c += 2) {
+      const a = Math.max(0, Math.ceil(cortes[c] - 0.5));
+      const b = Math.min(C - 1, Math.floor(cortes[c + 1] - 0.5));
+      for (let i = a; i <= b; i++) m[j][i] = 1;
+    }
+  }
+  return m;
+}

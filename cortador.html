@@ -222,8 +222,8 @@
 
 <script type="module">
 import { montarPorContorno, montarCarimbo, maiorPedaco, preencherFuros, suavizar,
-         borrar, contornos, suavizarLinha, decimar, mover, espelhar, semBorda,
-         filtrarPequenos, afinar, descolorir, tintaDoDesenho } from './cortador.js';
+         borrar, contornos, suavizarLinha, decimar, mover, espelhar, semBorda, deslocarLinha,
+         filtrarPequenos, afinar, descolorir, tintaDoDesenho, preencherPoligono } from './cortador.js';
 import { engordar, encolher } from './texto.js';
 
 /** Largura em X que uma malha ocupa, pra pôr a peça seguinte ao lado. */
@@ -520,6 +520,18 @@ function calcular() {
         for (let j = 0; j < md.length; j++)
           for (let i = 0; i < md[0].length; i++) if (det.cheias[j][i]) md[j][i] = 1;
       } else md = md || det.cheias;
+
+      // Recorta o traço NA CHAPA, em vez de descartar o laço que passa dela.
+      // O contorno do rosto é um laço só e encosta na borda em algum ponto —
+      // descartando, sumia o desenho inteiro e o 3D não batia com a prévia.
+      if (md) {
+        const dentro = deslocarLinha(laços[0], -(op.espessuraLamina / 2 + +$('folga').value + 0.3),
+                                     op.mmPorCelula, 1);
+        const chapaFina = preencherPoligono(dentro.map(([x, y]) => [x * F, y * F]),
+                                            md[0].length, md.length);
+        for (let j = 0; j < md.length; j++)
+          for (let i = 0; i < md[0].length; i++) if (!chapaFina[j][i]) md[j][i] = 0;
+      }
       // Borrão de raio 1 e ponto. Nesta grade isso já é bem menos que a largura
       // da caneta, e alisa. Em raio 2 o vale entre duas linhas vizinhas subia
       // acima do meio e elas FUNDIAM — era daí o borrão do Mickey, onde o
