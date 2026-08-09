@@ -450,7 +450,13 @@ export function triangular(poli) {
       let limpo = true;
       for (const k of restam) {
         if (k === ia || k === ib || k === ic) continue;
-        if (dentroDoTri(a, b, c, p[k])) { limpo = false; break; }
+        const q = p[k];
+        // Ponto REPETIDO não conta como estorvo. A costura de furo passa duas
+        // vezes pelo mesmo par de vértices, e como o teste de dentro aceita a
+        // borda, cada orelha era recusada e o recorte travava inteiro.
+        if ((q[0] === a[0] && q[1] === a[1]) || (q[0] === b[0] && q[1] === b[1])
+         || (q[0] === c[0] && q[1] === c[1])) continue;
+        if (dentroDoTri(a, b, c, q)) { limpo = false; break; }
       }
       if (!limpo) continue;
       saida.push([a, b, c]);
@@ -493,7 +499,54 @@ export function deslocarLinha(linha, d, e, paraFora = 1) {
  * no outro — a peça ficava com normal inconsistente e o fatiador podia ler o
  * dentro como fora.
  */
-function prisma(tris, linha, e, z0, z1) {
+/**
+ * Costura os furos no contorno externo por uma ponte de ida e volta.
+ *
+ * O recortador de orelhas só sabe polígono simples. Pra um anel — que é o que o
+ * traço vira — a saída padrão é ligar o furo ao contorno por um corte, e
+ * percorrer o furo no sentido contrário: vira um polígono só, com uma fenda de
+ * largura zero, e o recortador não percebe a diferença.
+ */
+function costurarFuros(externo, furos) {
+  // Os sentidos de giro têm que ser CONTRÁRIOS: externo num, furo no outro.
+  // Iguais, a ponte fecha em vez de abrir, e o recortador devolve um triângulo
+  // só — foi o que aconteceu na primeira versão.
+  let poli = externo.slice(0, -1);
+  if (areaComSinal([...poli, poli[0]]) < 0) poli = poli.slice().reverse();
+  const lista = furos
+    .map((f) => {
+      let q = f.slice(0, -1);
+      if (areaComSinal([...q, q[0]]) > 0) q = q.slice().reverse();
+      return q;
+    })
+    .filter((q) => q.length >= 3)
+    // do furo mais à direita pro mais à esquerda: a ponte de um não passa por
+    // cima do outro
+    .sort((a, b) => Math.max(...b.map((p) => p[0])) - Math.max(...a.map((p) => p[0])));
+
+  for (const furo of lista) {
+    let melhorF = 0;
+    for (let i = 1; i < furo.length; i++) if (furo[i][0] > furo[melhorF][0]) melhorF = i;
+    let melhorP = 0, perto = Infinity;
+    for (let i = 0; i < poli.length; i++) {
+      const d = (poli[i][0] - furo[melhorF][0]) ** 2 + (poli[i][1] - furo[melhorF][1]) ** 2;
+      if (d < perto) { perto = d; melhorP = i; }
+    }
+    const anel = [];
+    for (let i = 0; i <= furo.length; i++) anel.push(furo[(melhorF + i) % furo.length]);
+    poli = [...poli.slice(0, melhorP + 1), ...anel, ...poli.slice(melhorP)];
+  }
+  return [...poli, poli[0]];
+}
+
+/**
+ * Prisma reto a partir de um contorno, com furos opcionais.
+ *
+ * Sem os furos, o anel do traço saía maciço: cada laço virava um sólido por
+ * conta própria, e o laço de dentro — que é o furo — virava um pilar tapando o
+ * miolo. Na prévia o furo aparecia (regra par-ímpar) e no 3D não.
+ */
+function prisma(tris, linha, e, z0, z1, furos = []) {
   let p = linha.slice(0, -1);
   const n = p.length;
   if (n < 3) return;
@@ -503,10 +556,55 @@ function prisma(tris, linha, e, z0, z1) {
     const k = (i + 1) % n;
     tris.push([V(i, z0), V(k, z0), V(k, z1)], [V(i, z0), V(k, z1), V(i, z1)]);
   }
-  for (const [a, b, c] of triangular(linha)) {
+  // parede do furo, virada pro lado contrário: o material fica por fora dela
+  for (const f of furos) {
+    let q = f.slice(0, -1);
+    if (q.length < 3) continue;
+    if (areaComSinal([...q, q[0]]) > 0) q = q.slice().reverse();
+    const W = (i, z) => [q[i][0] * e, q[i][1] * e, z];
+    for (let i = 0; i < q.length; i++) {
+      const k = (i + 1) % q.length;
+      tris.push([W(i, z0), W(k, z0), W(k, z1)], [W(i, z0), W(k, z1), W(i, z1)]);
+    }
+  }
+  const tampa = furos.length ? costurarFuros(linha, furos) : linha;
+  for (const [a, b, c] of triangular(tampa)) {
     tris.push([[a[0]*e, a[1]*e, z1], [b[0]*e, b[1]*e, z1], [c[0]*e, c[1]*e, z1]]);
     tris.push([[a[0]*e, a[1]*e, z0], [c[0]*e, c[1]*e, z0], [b[0]*e, b[1]*e, z0]]);
   }
+}
+
+/** Agrupa laços em (externo, furos): quem está dentro de um número ímpar é furo. */
+export function agruparFuros(lacos) {
+  const dentroDe = (p, l) => {
+    let d = false;
+    for (let i = 0, j = l.length - 2; i < l.length - 1; j = i++) {
+      const [xi, yi] = l[i], [xj, yj] = l[j];
+      if ((yi > p[1]) !== (yj > p[1]) && p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi) d = !d;
+    }
+    return d;
+  };
+  const area = lacos.map((l) => Math.abs(areaComSinal(l)));
+  const paiDe = lacos.map(() => -1);
+  for (let i = 0; i < lacos.length; i++) {
+    let melhor = -1;
+    for (let j = 0; j < lacos.length; j++) {
+      if (i === j || area[j] <= area[i]) continue;
+      if (!dentroDe(lacos[i][0], lacos[j])) continue;
+      if (melhor < 0 || area[j] < area[melhor]) melhor = j;   // o menor que contém
+    }
+    paiDe[i] = melhor;
+  }
+  const profundidade = (i) => { let d = 0, k = i; while (paiDe[k] >= 0) { k = paiDe[k]; d++; } return d; };
+  const grupos = [];
+  const indice = new Map();
+  lacos.forEach((l, i) => {
+    if (profundidade(i) % 2 === 0) { indice.set(i, grupos.length); grupos.push({ externo: l, furos: [] }); }
+  });
+  lacos.forEach((l, i) => {
+    if (profundidade(i) % 2 === 1 && indice.has(paiDe[i])) grupos[indice.get(paiDe[i])].furos.push(l);
+  });
+  return grupos;
 }
 
 /** Cilindro fechado, pro botão de apertar. */
@@ -564,7 +662,9 @@ export function montarCarimbo(op, contorno, laçosDetalhe) {
   // inverte a peça inteira.
   const solto = (montar) => { const t = []; montar(t); anexar(tris, fechar(t)); };
 
-  for (const l of cabem) solto((t) => prisma(t, l, e, 0, zRelevo + ov));
+  // laço de dentro é FURO, não sólido novo: senão o olho e o nariz saem maciços
+  for (const g of agruparFuros(cabem))
+    solto((t) => prisma(t, g.externo, e, 0, zRelevo + ov, g.furos));
   solto((t) => prisma(t, chapa, e, zRelevo, zChapa));
 
   if (op.botao > 0) {
