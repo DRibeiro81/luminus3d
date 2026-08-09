@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Luminus 3D</title>
+<title>Retrato em Linhas — Luminus 3D</title>
 <style>
   :root {
     --bg: #14161a; --painel: #1c1f25; --linha: #2b3038;
@@ -142,9 +142,9 @@
 
 <aside>
   <header>
-    <h1>Luminus 3D</h1>
-    <div class="sub">Foto vira quadro pra imprimir.
-      <a href="index.html">Início</a> · <a href="vaso.html">Vasos</a> · <a href="luz.html">Foto na Luz</a> · <a href="texto.html">Nome no Lápis</a></div>
+    <h1>Retrato em Linhas</h1>
+    <div class="sub">De perto são linhas; de longe, a sua foto.
+      <a href="index.html">Início</a> · <a href="app.html">Retrato em Linhas</a> · <a href="luz.html">Foto Mágica</a> · <a href="vaso.html">Vaso e Abajur</a> · <a href="texto.html">Lápis com Nome</a></div>
   </header>
 
   <div class="corpo">
@@ -721,7 +721,7 @@ async function baixarPerguntando(sugestao, tipo, ext, gerar, botao) {
 }
 
 const sugestaoNome = (ext) =>
-  `${nomeBase}-luminus3d-${Math.round(ultimo.largura)}mm.${ext}`;
+  `${nomeBase}-retrato-${Math.round(ultimo.largura)}mm.${ext}`;
 
 $('btStl').onclick = () =>
   baixarPerguntando(sugestaoNome('stl'), 'model/stl', 'stl',

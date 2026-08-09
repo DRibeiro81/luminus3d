@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Foto na Luz</title>
+<title>Foto Mágica — Luminus 3D</title>
 <style>
   :root {
     --bg: #14161a; --painel: #1c1f25; --linha: #2b3038;
@@ -98,9 +98,9 @@
 
 <aside>
   <header>
-    <h1>Foto na Luz</h1>
+    <h1>Foto Mágica</h1>
     <div class="sub">Apagada é uma placa branca; acesa, aparece a foto.
-      <a href="index.html">Início</a> · <a href="app.html">Quadros</a> · <a href="vaso.html">Vasos</a> · <a href="texto.html">Nome no Lápis</a></div>
+      <a href="index.html">Início</a> · <a href="app.html">Retrato em Linhas</a> · <a href="luz.html">Foto Mágica</a> · <a href="vaso.html">Vaso e Abajur</a> · <a href="texto.html">Lápis com Nome</a></div>
   </header>
 
   <div class="corpo">
@@ -518,7 +518,7 @@ function baixar(dados, nome, tipo) {
 }
 async function baixarPeca(qual, botao) {
   const mm = Math.round(ultimo.op.largura);
-  const sugestao = qual === 'painel' ? `${nomeBase}-luz-${mm}mm.stl` : `${nomeBase}-pe.stl`;
+  const sugestao = qual === 'painel' ? `${nomeBase}-foto-magica-${mm}mm.stl` : `${nomeBase}-pe.stl`;
   let destino = null;
   if (window.showSaveFilePicker) {
     try {
