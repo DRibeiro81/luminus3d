@@ -221,7 +221,7 @@
 <script type="module">
 import { montarPorContorno, montarCarimbo, maiorPedaco, preencherFuros, suavizar,
          borrar, contornos, suavizarLinha, decimar, mover, espelhar, semBorda,
-         filtrarPequenos, afinar, ampliar, descolorir, divisasDeRegiao } from './cortador.js';
+         filtrarPequenos, afinar, descolorir, tintaDoDesenho } from './cortador.js';
 import { engordar, encolher } from './texto.js';
 
 /** Largura em X que uma malha ocupa, pra pôr a peça seguinte ao lado. */
@@ -397,42 +397,67 @@ function silhueta() {
  * Comparando cada célula com as vizinhas, a borda entre duas cores acende, e é
  * exatamente o que se chama de "traço" no desenho.
  */
-function bordasDoDesenho(d, C, L, cores, minimoCelulas) {
+function bordasDoDesenho(d, C, L, cores, minimoCelulas, magrezaCelulas) {
   const { rot } = descolorir(d, C, L, cores);
-  return divisasDeRegiao(rot, C, L, minimoCelulas);
+  return tintaDoDesenho(rot, C, L, minimoCelulas, magrezaCelulas);
 }
 
 function mascaraDetalhes(sil, recuoMm, mmPorCelula) {
   if (!imagem || !sil.quadro) return null;
   const q = sil.quadro;
   const L = sil.mascara.length, C = sil.mascara[0].length;
-  // mesma redução da silhueta, e depois o MESMO recorte
+
+  // A grade da LÂMINA é grossa de propósito: meio milímetro por célula chega e
+  // sobra pra um contorno fechado. O TRAÇO na mesma grade sai em escada, e
+  // ampliar depois não conserta — ampliar copia o quadradinho, não inventa
+  // precisão, e ainda deixa o borrão fraco demais pra alisar.
+  //
+  // Então o traço é lido numa grade PRÓPRIA, mais fina, tirada direto da
+  // imagem, que é onde a precisão de verdade está — perto de 0,15 mm por
+  // célula, que é a ordem do bico.
+  //
+  // A fineza NÃO pode depender da espessura da caneta: amarrada nela, mexer na
+  // caneta mudava quais detalhes apareciam, e não só a grossura deles.
+  const F = Math.max(1, Math.min(5, Math.round(mmPorCelula / 0.15)));
+  const fC = q.C * F, fL = q.L * F;
   const cv = document.createElement('canvas');
-  cv.width = q.C; cv.height = q.L;
+  cv.width = fC; cv.height = fL;
   const c = cv.getContext('2d', { willReadFrequently: true });
-  c.fillStyle = '#fff'; c.fillRect(0, 0, q.C, q.L);
-  c.drawImage(imagem, 0, 0, q.C, q.L);
-  const px = Math.max(0, Math.min(q.C - 1, q.x0));
-  const py = Math.max(0, Math.min(q.L - 1, q.y0));
-  const pw = Math.min(q.C - px, C), ph = Math.min(q.L - py, L);
+  c.fillStyle = '#fff'; c.fillRect(0, 0, fC, fL);
+  c.drawImage(imagem, 0, 0, fC, fL);
+  const px = Math.max(0, Math.min(fC - 1, q.x0 * F));
+  const py = Math.max(0, Math.min(fL - 1, q.y0 * F));
+  const pw = Math.min(fC - px, C * F), ph = Math.min(fL - py, L * F);
   const d = c.getImageData(px, py, pw, ph).data;
+
   // Mancha menor que o pedido some INTEIRA, junto com o contorno dela. Filtrar
   // por tamanho de região é o que faz o controle ter sentido: filtrar por
   // comprimento de traço só picotava a linha e deixava pedaço solto.
-  const lado = Math.max(2, +$('detalhe').value / mmPorCelula);
-  const bordas = bordasDoDesenho(d, pw, ph, +$('limiarDet').value, Math.round(lado * lado));
-  const m = [];
-  for (let j = 0; j < L; j++) {
-    const linha = new Uint8Array(C);
-    for (let i = 0; i < C; i++) {
+  const mmFina = mmPorCelula / F;
+  const lado = Math.max(2, +$('detalhe').value / mmFina);
+  // O que conta como "traço" acompanha o tamanho da peça, não um número fixo em
+  // milímetro: o mesmo desenho impresso em 80 ou em 200 mm tem o traço na mesma
+  // proporção. Uns 3,5% do maior lado.
+  const magreza = Math.max(2, Math.round(0.035 * +$('lado').value / 2 / mmFina));
+  const bordas = bordasDoDesenho(d, pw, ph, +$('limiarDet').value,
+                                 Math.round(lado * lado), magreza);
+
+  // a silhueta na mesma grade fina, pra o recorte bater célula a célula
+  const dentro = [], m = [];
+  for (let j = 0; j < ph; j++) {
+    const linha = new Uint8Array(pw), sil2 = new Uint8Array(pw);
+    const sj = Math.min(L - 1, (j / F) | 0);
+    for (let i = 0; i < pw; i++) {
+      sil2[i] = sil.mascara[sj][Math.min(C - 1, (i / F) | 0)];
       // traço só vale dentro da figura, senão vira um segundo contorno
       // colado na lâmina
-      linha[i] = (i < pw && j < ph && bordas[j][i] && sil.mascara[j][i]) ? 1 : 0;
+      linha[i] = (bordas[j][i] && sil2[i]) ? 1 : 0;
     }
-    m.push(linha);
+    m.push(linha); dentro.push(sil2);
   }
   // o traço do próprio contorno já é a lâmina: sai fora
-  return semBorda(m, sil.mascara, Math.max(1, Math.round(recuoMm / sil.mmPorCelula)));
+  const limpo = semBorda(m, dentro, Math.max(1, Math.round(recuoMm / mmFina)));
+  return limpo ? { mascara: limpo, F, mmFina } : null;
 }
 
 function calcular() {
@@ -461,29 +486,24 @@ function calcular() {
   let carimbo = null, tris = r.tris, laçosDet = [];
   if ($('temCarimbo').checked) {
     const recuo = op.espessuraLamina / 2 + +$('folga').value + 0.8;
-    let md = mascaraDetalhes(s, recuo, op.mmPorCelula);
-    // Vira traço de caneta: afina tudo até uma linha só e engorda de volta na
-    // espessura pedida. Assim mancha cheia e linha fina saem iguais, e some a
-    // necessidade de ficar compensando espessura em três controles.
-    if (md) md = afinar(md);
-    // joga fora o traço curto demais ANTES de engordar, senão engordar junta
-    // cílio com sobrancelha e o filtro perde o sentido
-    // a limpeza pesada agora é por região, lá em cima; aqui só cai cisco solto
-    if (md) md = filtrarPequenos(md, 6);
-    const grosso = Math.max(0, Math.round((+$('traco').value - op.mmPorCelula) / 2 / op.mmPorCelula));
-    if (md && grosso > 0) md = engordar(md, grosso);
-    // O traçado precisa de borrão pra não sair em escada, mas borrão come linha
-    // fina. A saída é AMPLIAR a grade só do traço: com a caneta ocupando umas
-    // seis células, o borrão alisa sem apagar. As coordenadas voltam divididas
-    // pelo mesmo fator.
-    if (md) {
-      const larguraCel = Math.max(1, +$('traco').value / op.mmPorCelula);
-      const k = Math.max(1, Math.min(4, Math.ceil(6 / larguraCel)));
-      const grande = ampliar(preencherFuros(md), k);
-      // borrão de raio 1 SEMPRE: depois de ampliar, a caneta já ocupa uma
-      // dezena de células, e raio proporcional ao fator voltaria a apagá-la
-      laçosDet = contornos(borrar(grande, 1))
-        .map((l) => decimar(suavizarLinha(l.map(([x, y]) => [x / k, y / k]), 2), 0.7))
+    const det = mascaraDetalhes(s, recuo, op.mmPorCelula);
+    if (det) {
+      const { F, mmFina } = det;
+      // Vira traço de caneta: afina tudo até uma linha só e engorda de volta na
+      // espessura pedida. Assim mancha cheia e linha fina saem iguais, e some a
+      // necessidade de ficar compensando espessura em três controles.
+      let md = afinar(det.mascara);
+      // a limpeza pesada é por região, lá em cima; aqui só cai cisco solto
+      md = filtrarPequenos(md, Math.max(4, Math.round(1.5 / mmFina)));
+      const grosso = Math.max(1, Math.round((+$('traco').value - mmFina) / 2 / mmFina));
+      md = engordar(md, grosso);
+      // Agora o borrão vale a pena: nesta grade a caneta ocupa umas oito
+      // células, então raio 2 come a escada e não a linha. As coordenadas
+      // voltam divididas por F, que é a grade da lâmina.
+      // sem preencherFuros: aqui a máscara é TRAÇO, e traço fecha laço o tempo
+      // todo — tapar o miolo de cada laço transformava o rosto num disco
+      laçosDet = contornos(borrar(md, 2))
+        .map((l) => decimar(suavizarLinha(l.map(([x, y]) => [x / F, y / F]), 3), 0.5))
         .filter((l) => l.length > 12);
     }
     if (laçosDet.length) {
@@ -547,8 +567,19 @@ function desenhar(r) {
     }
     c.stroke();
   };
-  // o traço do carimbo por baixo, pra a lâmina ficar por cima onde se cruzam
-  if (r.tracos && r.tracos.length) risco(r.tracos, '#7fd4ff', 0.6);
+  // O traço do carimbo vai PREENCHIDO: o laço é o contorno do relevo, então
+  // riscá-lo desenhava duas linhas paralelas e a prévia parecia dobrada.
+  if (r.tracos && r.tracos.length) {
+    c.fillStyle = '#7fd4ff';
+    c.beginPath();
+    for (const l of r.tracos) {
+      if (l.length < 2) continue;
+      c.moveTo(l[0][0] * escala, l[0][1] * escala);
+      for (let k = 1; k < l.length; k++) c.lineTo(l[k][0] * escala, l[k][1] * escala);
+      c.closePath();
+    }
+    c.fill('evenodd');
+  }
   risco(r.contorno || [], '#d9a441', r.op.espessuraLamina);
 }
 

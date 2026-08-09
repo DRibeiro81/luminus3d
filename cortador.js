@@ -722,10 +722,11 @@ export function descolorir(d, C, L, k = 8, voltas = 12) {
   // verticais cai tudo na mesma faixa e as sementes nascem da mesma cor.
   const centros = [[d[0], d[1], d[2]]];
   const longe = new Float64Array(n).fill(Infinity);
+  const pulo = Math.max(1, Math.floor(n / 40000));
   while (centros.length < k) {
     const q = centros[centros.length - 1];
     let alvo = 0, pior = -1;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < n; i += pulo) {
       const p = i * 4;
       const e = (d[p] - q[0]) ** 2 + (d[p+1] - q[1]) ** 2 + (d[p+2] - q[2]) ** 2;
       if (e < longe[i]) longe[i] = e;
@@ -735,10 +736,14 @@ export function descolorir(d, C, L, k = 8, voltas = 12) {
     centros.push([d[alvo], d[alvo + 1], d[alvo + 2]]);
   }
   k = centros.length;
+  // As voltas rodam numa AMOSTRA. Achar a cor média não precisa de todo pixel,
+  // e a grade do traço é fina de propósito — sem isso cada volta varre centenas
+  // de milhares de pixels e a prévia trava a cada mexida de controle.
+  const passo = Math.max(1, Math.floor(n / 40000));
   const rot = new Uint8Array(n);
   for (let volta = 0; volta < voltas; volta++) {
     const soma = centros.map(() => [0, 0, 0, 0]);
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < n; i += passo) {
       const p = i * 4;
       let melhor = 0, dist = Infinity;
       for (let c = 0; c < k; c++) {
@@ -760,6 +765,17 @@ export function descolorir(d, C, L, k = 8, voltas = 12) {
     }
     if (!mexeu) break;
   }
+  // e no fim cada pixel recebe a cor mais próxima, esse sim uma vez só
+  for (let i = 0; i < n; i++) {
+    const p = i * 4;
+    let melhor = 0, dist = Infinity;
+    for (let c = 0; c < k; c++) {
+      const q = centros[c];
+      const e = (d[p] - q[0]) ** 2 + (d[p+1] - q[1]) ** 2 + (d[p+2] - q[2]) ** 2;
+      if (e < dist) { dist = e; melhor = c; }
+    }
+    rot[i] = melhor;
+  }
   return { rot, centros };
 }
 
@@ -772,62 +788,158 @@ export function descolorir(d, C, L, k = 8, voltas = 12) {
  * contorno dela, em vez de virar risquinho solto.
  */
 export function divisasDeRegiao(rot, C, L, minimoCelulas) {
-  const reg = new Int32Array(C * L).fill(-1);
-  const tamanhos = [];
+  const n = C * L;
+  const reg = new Int32Array(n).fill(-1);
+  const tam = [];
+  const cor = [];
   const pilha = [];
-  for (let p = 0; p < C * L; p++) {
+  for (let p = 0; p < n; p++) {
     if (reg[p] >= 0) continue;
-    const id = tamanhos.length;
-    let n = 0;
+    const id = tam.length;
+    let q = 0;
     reg[p] = id; pilha.length = 0; pilha.push(p);
     while (pilha.length) {
-      const q = pilha.pop(); n++;
-      const y = (q / C) | 0, x = q % C;
-      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
-        const nx = x + dx, ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= C || ny >= L) continue;
-        const k = ny * C + nx;
-        if (reg[k] < 0 && rot[k] === rot[q]) { reg[k] = id; pilha.push(k); }
-      }
+      const a = pilha.pop(); q++;
+      const y = (a / C) | 0, x = a % C;
+      if (x + 1 < C && reg[a + 1] < 0 && rot[a + 1] === rot[a]) { reg[a + 1] = id; pilha.push(a + 1); }
+      if (x > 0 && reg[a - 1] < 0 && rot[a - 1] === rot[a]) { reg[a - 1] = id; pilha.push(a - 1); }
+      if (y + 1 < L && reg[a + C] < 0 && rot[a + C] === rot[a]) { reg[a + C] = id; pilha.push(a + C); }
+      if (y > 0 && reg[a - C] < 0 && rot[a - C] === rot[a]) { reg[a - C] = id; pilha.push(a - C); }
     }
-    tamanhos.push(n);
+    tam.push(q); cor.push(rot[p]);
   }
 
-  // pedaço pequeno adota o rótulo do vizinho de fora mais comum
-  let mudou = true, giros = 0;
-  while (mudou && giros++ < 6) {
-    mudou = false;
-    for (let p = 0; p < C * L; p++) {
-      if (tamanhos[reg[p]] >= minimoCelulas) continue;
-      const y = (p / C) | 0, x = p % C;
-      const conta = new Map();
-      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
-        const nx = x + dx, ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= C || ny >= L) continue;
-        const k = ny * C + nx;
-        // compara pela cor JÁ trocada, não pela região de origem: senão o miolo
-        // do pedaço só vê vizinho da mesma região e nunca é absorvido — some a
-        // casca de fora e fica um caroço no meio
-        if (rot[k] === rot[p]) continue;
-        conta.set(rot[k], (conta.get(rot[k]) || 0) + tamanhos[reg[k]]);
-      }
-      if (!conta.size) continue;
-      let melhor = rot[p], peso = -1;
-      for (const [cor, w] of conta) if (w > peso) { peso = w; melhor = cor; }
-      if (melhor !== rot[p]) { rot[p] = melhor; mudou = true; }
-    }
+  // Quem faz vizinhança com quem. Guardado por região, não por célula: o que
+  // interessa é fundir região inteira, e não descascar anel por anel — num
+  // campo todo pontilhado o descascamento nunca fecha, e sobrava sujeira.
+  const viz = tam.map(() => new Set());
+  for (let p = 0; p < n; p++) {
+    const y = (p / C) | 0, x = p % C;
+    if (x + 1 < C && reg[p + 1] !== reg[p]) { viz[reg[p]].add(reg[p + 1]); viz[reg[p + 1]].add(reg[p]); }
+    if (y + 1 < L && reg[p + C] !== reg[p]) { viz[reg[p]].add(reg[p + C]); viz[reg[p + C]].add(reg[p]); }
   }
+
+  const pai = tam.map((_, i) => i);
+  const raiz = (a) => { while (pai[a] !== a) a = pai[a] = pai[pai[a]]; return a; };
+  // do menor pro maior: pedaço pequeno é engolido pelo vizinho mais graúdo
+  const ordem = tam.map((_, i) => i).sort((a, b) => tam[a] - tam[b]);
+  for (const i of ordem) {
+    let r = raiz(i);
+    if (tam[r] >= minimoCelulas) continue;
+    let alvo = -1, maior = -1;
+    for (const v of viz[r]) {
+      const w = raiz(v);
+      if (w !== r && tam[w] > maior) { maior = tam[w]; alvo = w; }
+    }
+    if (alvo < 0) continue;                     // imagem de uma cor só
+    pai[r] = alvo;
+    tam[alvo] += tam[r];
+    for (const v of viz[r]) viz[alvo].add(v);
+  }
+  for (let p = 0; p < n; p++) rot[p] = cor[raiz(reg[p])];
 
   const m = [];
   for (let j = 0; j < L; j++) {
     const linha = new Uint8Array(C);
     for (let i = 0; i < C; i++) {
       const p = j * C + i;
-      const dir = i + 1 < C && rot[p + 1] !== rot[p];
-      const bai = j + 1 < L && rot[p + C] !== rot[p];
-      if (dir || bai) linha[i] = 1;
+      if ((i + 1 < C && rot[p + 1] !== rot[p]) || (j + 1 < L && rot[p + C] !== rot[p])) linha[i] = 1;
     }
     m.push(linha);
+  }
+  return m;
+}
+
+/**
+ * A tinta do desenho: o que um lápis teria traçado.
+ *
+ * Só pegar a divisa entre regiões não serve pra arte de linha. Um traço preto é
+ * ele mesmo uma região, e região tem divisa dos DOIS lados — então cada contorno
+ * do desenho saía dobrado, em anel, e bolinha virava donut.
+ *
+ * A separação certa é por espessura da região, não por cor:
+ *
+ *   região FINA (traço, bolinha, cílio)  ->  vira a linha de centro dela
+ *   região GORDA (rosto, cabelo, vestido) ->  vira a divisa com a vizinha gorda
+ *
+ * E divisa de região fina não conta: onde um traço preto separa dois campos, a
+ * linha de centro dele já é a marca — botar as divisas junto é que dobrava.
+ */
+export function tintaDoDesenho(rot, C, L, minimoCelulas, magrezaCelulas) {
+  const n = C * L;
+  const reg = new Int32Array(n).fill(-1);
+  const tam = [], cor = [], pilha = [];
+  for (let p = 0; p < n; p++) {
+    if (reg[p] >= 0) continue;
+    const id = tam.length;
+    let q = 0;
+    reg[p] = id; pilha.length = 0; pilha.push(p);
+    while (pilha.length) {
+      const a = pilha.pop(); q++;
+      const y = (a / C) | 0, x = a % C;
+      if (x + 1 < C && reg[a+1] < 0 && rot[a+1] === rot[a]) { reg[a+1] = id; pilha.push(a+1); }
+      if (x > 0 && reg[a-1] < 0 && rot[a-1] === rot[a]) { reg[a-1] = id; pilha.push(a-1); }
+      if (y + 1 < L && reg[a+C] < 0 && rot[a+C] === rot[a]) { reg[a+C] = id; pilha.push(a+C); }
+      if (y > 0 && reg[a-C] < 0 && rot[a-C] === rot[a]) { reg[a-C] = id; pilha.push(a-C); }
+    }
+    tam.push(q); cor.push(rot[p]);
+  }
+
+  // funde o pedaço pequeno na vizinha maior (união-e-busca: descascar anel por
+  // anel não converge num campo pontilhado)
+  const viz = tam.map(() => new Set());
+  for (let p = 0; p < n; p++) {
+    const y = (p / C) | 0, x = p % C;
+    if (x + 1 < C && reg[p+1] !== reg[p]) { viz[reg[p]].add(reg[p+1]); viz[reg[p+1]].add(reg[p]); }
+    if (y + 1 < L && reg[p+C] !== reg[p]) { viz[reg[p]].add(reg[p+C]); viz[reg[p+C]].add(reg[p]); }
+  }
+  const pai = tam.map((_, i) => i);
+  const raiz = (a) => { while (pai[a] !== a) a = pai[a] = pai[pai[a]]; return a; };
+  for (const i of tam.map((_, i) => i).sort((a, b) => tam[a] - tam[b])) {
+    const r = raiz(i);
+    if (tam[r] >= minimoCelulas) continue;
+    let alvo = -1, maior = -1;
+    for (const v of viz[r]) { const w = raiz(v); if (w !== r && tam[w] > maior) { maior = tam[w]; alvo = w; } }
+    if (alvo < 0) continue;
+    pai[r] = alvo; tam[alvo] += tam[r];
+    for (const v of viz[r]) viz[alvo].add(v);
+  }
+  const fim = new Int32Array(n);
+  for (let p = 0; p < n; p++) fim[p] = raiz(reg[p]);
+
+  // Quão gorda é cada região: distância de cada célula até sair da região, por
+  // duas varreduras. Meia largura do traço, em outras palavras.
+  const dist = new Int32Array(n);
+  const bordaAqui = (p, x, y) =>
+    x === 0 || y === 0 || x === C - 1 || y === L - 1 ||
+    fim[p+1] !== fim[p] || fim[p-1] !== fim[p] || fim[p+C] !== fim[p] || fim[p-C] !== fim[p];
+  for (let y = 0; y < L; y++) for (let x = 0; x < C; x++) {
+    const p = y * C + x;
+    if (bordaAqui(p, x, y)) { dist[p] = 0; continue; }
+    dist[p] = Math.min(dist[p - 1], dist[p - C]) + 1;
+  }
+  const gordura = new Int32Array(tam.length);
+  for (let y = L - 1; y >= 0; y--) for (let x = C - 1; x >= 0; x--) {
+    const p = y * C + x;
+    if (dist[p]) dist[p] = Math.min(dist[p],
+      (x + 1 < C && fim[p+1] === fim[p] ? dist[p+1] : 0) + 1,
+      (y + 1 < L && fim[p+C] === fim[p] ? dist[p+C] : 0) + 1);
+    if (dist[p] > gordura[fim[p]]) gordura[fim[p]] = dist[p];
+  }
+  const magra = (r) => gordura[r] <= magrezaCelulas;
+
+  const finas = [], m = [];
+  for (let j = 0; j < L; j++) { finas.push(new Uint8Array(C)); m.push(new Uint8Array(C)); }
+  for (let p = 0; p < n; p++) if (magra(fim[p])) finas[(p / C) | 0][p % C] = 1;
+  const centro = afinar(finas);
+
+  for (let j = 0; j < L; j++) for (let i = 0; i < C; i++) {
+    const p = j * C + i;
+    if (centro[j][i]) { m[j][i] = 1; continue; }
+    if (magra(fim[p])) continue;                       // divisa de traço não conta
+    const dir = i + 1 < C && fim[p+1] !== fim[p] && !magra(fim[p+1]);
+    const bai = j + 1 < L && fim[p+C] !== fim[p] && !magra(fim[p+C]);
+    if (dir || bai) m[j][i] = 1;
   }
   return m;
 }
