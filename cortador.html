@@ -40,8 +40,9 @@
   .rot { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
   .rot span:last-child { color: var(--destaque); font-variant-numeric: tabular-nums; }
   input[type=range] { width: 100%; accent-color: var(--destaque); }
-  input[type=number] { width: 100%; padding: 6px 8px; background: #12141a; color: var(--texto);
-                       border: 1px solid var(--linha); border-radius: 6px; font-size: 13px; }
+  input[type=number], select { width: 100%; padding: 6px 8px; background: #12141a; color: var(--texto);
+                       border: 1px solid var(--linha); border-radius: 6px; font-size: 13px;
+                       font-family: inherit; }
   .caixa { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
   .caixa input { accent-color: var(--destaque); }
   .dica { margin: 6px 0 0; font-size: 11px; color: var(--fraco); line-height: 1.45; }
@@ -98,11 +99,26 @@
       <button class="vazio" id="btEscolher">Escolher imagem…</button>
       <input type="file" id="arquivo" accept="image/*" hidden>
       <label style="margin-top:12px">
-        <div class="rot"><span>Onde separa figura do fundo</span><span id="rLimiar">50%</span></div>
+        <div class="rot"><span>Recorte</span></div>
+        <select id="modo">
+          <option value="fundo">Tirar o fundo (recomendado)</option>
+          <option value="escuro">Só a parte escura</option>
+          <option value="claro">Só a parte clara</option>
+        </select>
+      </label>
+      <label data-de="fundo">
+        <div class="rot"><span>Tolerância do fundo</span><span id="rTol">18%</span></div>
+        <input type="range" id="tol" min="2" max="60" step="1" value="18"></label>
+      <label data-de="tom" hidden>
+        <div class="rot"><span>Onde separa</span><span id="rLimiar">50%</span></div>
         <input type="range" id="limiar" min="5" max="95" step="1" value="50"></label>
-      <div class="caixa"><input type="checkbox" id="inverter"><span>Inverter (figura clara)</span></div>
       <div class="caixa"><input type="checkbox" id="furos" checked><span>Fechar os furos de dentro</span></div>
-      <p class="dica">Funciona melhor com desenho de silhueta cheia, fundo limpo e bom contraste.</p>
+      <label style="margin-top:10px">
+        <div class="rot"><span>Suavizar o contorno</span><span id="rSuave">1,2 mm</span></div>
+        <input type="range" id="suave" min="0" max="4" step="0.2" value="1.2"></label>
+      <p class="dica" id="dicaFigura">"Tirar o fundo" acha a cor de trás pelas bordas e chama de
+        figura tudo que sobra — é o que funciona com desenho colorido. Suavizar come dedo, mecha
+        de cabelo e ponta fina, que viram lâmina que não corta.</p>
     </div>
 
     <div class="etapa">
@@ -173,7 +189,7 @@
 </main>
 
 <script type="module">
-import { montarCortador, maiorPedaco, preencherFuros } from './cortador.js';
+import { montarCortador, maiorPedaco, preencherFuros, suavizar } from './cortador.js';
 import { escreverStl } from './geometria.js';
 import { criarVisor } from './visor3d.js';
 
@@ -183,6 +199,52 @@ let imagem = null, nomeBase = 'cortador', ultimo = null, pendente = 0;
 let visor = null, vendo = '3d';
 
 /* ---------------- imagem vira silhueta ---------------- */
+/**
+ * Separa figura de fundo inundando a partir das bordas.
+ *
+ * Tirar por claro/escuro é o que estava errado antes: numa figura colorida o
+ * escuro é o cabelo, não a silhueta. Aqui o fundo é encontrado pelo que ENCOSTA
+ * na borda e tem a cor de lá; figura é todo o resto. Onde a imagem tem
+ * transparência, o alfa já responde isso e nem precisa adivinhar cor.
+ */
+function tirarFundo(d, C, L, tolerancia) {
+  const alfa = new Uint8Array(C * L);
+  let transparentes = 0;
+  for (let k = 0; k < C * L; k++) { alfa[k] = d[k * 4 + 3] > 128 ? 1 : 0; if (!alfa[k]) transparentes++; }
+  if (transparentes > C * L * 0.02) return alfa;    // a imagem já veio recortada
+
+  // cor média das quatro bordas
+  let r = 0, g = 0, b = 0, n = 0;
+  const soma = (i, j) => { const k = (j * C + i) * 4; r += d[k]; g += d[k+1]; b += d[k+2]; n++; };
+  for (let i = 0; i < C; i++) { soma(i, 0); soma(i, L - 1); }
+  for (let j = 0; j < L; j++) { soma(0, j); soma(C - 1, j); }
+  r /= n; g /= n; b /= n;
+  const limite = (tolerancia / 100) * 441.7;        // 441,7 é a maior distância possível
+
+  const fundo = new Uint8Array(C * L);
+  const pilha = [];
+  const parecido = (k) => Math.hypot(d[k*4] - r, d[k*4+1] - g, d[k*4+2] - b) <= limite;
+  const por = (i, j) => {
+    if (i < 0 || j < 0 || i >= C || j >= L) return;
+    const k = j * C + i;
+    if (fundo[k] || !parecido(k)) return;
+    fundo[k] = 1; pilha.push(k);
+  };
+  for (let i = 0; i < C; i++) { por(i, 0); por(i, L - 1); }
+  for (let j = 0; j < L; j++) { por(0, j); por(C - 1, j); }
+  while (pilha.length) {
+    const k = pilha.pop(), j = (k / C) | 0, i = k % C;
+    por(i + 1, j); por(i - 1, j); por(i, j + 1); por(i, j - 1);
+  }
+  // Figura é o que a inundação não alcançou E não tem a cor do fundo. A segunda
+  // condição é o que preserva o furo de dentro: um vazio cercado pela figura não
+  // é alcançado pela inundação, mas tem a cor do fundo — e quem decide se ele
+  // vira material é a opção "fechar os furos", não este recorte.
+  const figura = new Uint8Array(C * L);
+  for (let k = 0; k < C * L; k++) figura[k] = (!fundo[k] && !parecido(k)) ? 1 : 0;
+  return figura;
+}
+
 function silhueta() {
   if (!imagem) return null;
   const e = +$('finura').value;
@@ -196,21 +258,29 @@ function silhueta() {
   const cv = document.createElement('canvas');
   cv.width = C; cv.height = L;
   const c = cv.getContext('2d', { willReadFrequently: true });
-  c.fillStyle = '#fff'; c.fillRect(0, 0, C, L);
+  // sem pintar de branco: a transparência tem que chegar aqui, é a informação
+  // mais confiável de onde a figura acaba
   c.drawImage(imagem, 0, 0, C, L);
   const d = c.getImageData(0, 0, C, L).data;
 
-  const corte = +$('limiar').value / 100;
-  const inv = $('inverter').checked;
+  const modo = $('modo').value;
+  const plano = modo === 'fundo'
+    ? tirarFundo(d, C, L, +$('tol').value)
+    : (() => {
+        const corte = +$('limiar').value / 100;
+        const f = new Uint8Array(C * L);
+        for (let k = 0; k < C * L; k++) {
+          const a = d[k*4+3] / 255;
+          const luz = a < 0.5 ? 1 : (0.299*d[k*4] + 0.587*d[k*4+1] + 0.114*d[k*4+2]) / 255;
+          f[k] = (modo === 'claro' ? luz > corte : luz < corte) ? 1 : 0;
+        }
+        return f;
+      })();
+
   const m = [];
   for (let j = 0; j < L; j++) {
     const linha = new Uint8Array(C);
-    for (let i = 0; i < C; i++) {
-      const k = (j * C + i) * 4;
-      const luz = (0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2]) / 255;
-      const dentro = inv ? luz > corte : luz < corte;
-      linha[i] = dentro ? 1 : 0;
-    }
+    for (let i = 0; i < C; i++) linha[i] = plano[j * C + i];
     m.push(linha);
   }
   // margem de uma célula em volta: a figura não pode encostar na borda, senão a
@@ -220,8 +290,15 @@ function silhueta() {
   mm.push(new Uint8Array(C + 2));
 
   const so = maiorPedaco(mm);
-  return { mascara: $('furos').checked ? preencherFuros(so.mascara) : so.mascara,
-           sobraram: so.sobraram, mmPorCelula: lado / n };
+  let fig = $('furos').checked ? preencherFuros(so.mascara) : so.mascara;
+  const suaveCel = Math.round(+$('suave').value / (lado / n));
+  if (suaveCel > 0) {
+    fig = suavizar(fig, suaveCel);
+    // suavizar pode partir a figura em dois; fica com o maior de novo
+    fig = maiorPedaco(fig).mascara;
+    if ($('furos').checked) fig = preencherFuros(fig);
+  }
+  return { mascara: fig, sobraram: so.sobraram, mmPorCelula: lado / n };
 }
 
 function calcular() {
@@ -367,6 +444,12 @@ $('btBaixar').onclick = async () => {
 const vg = (v, d = 1) => v.toFixed(d).replace('.', ',');
 function rotulos() {
   $('rLimiar').textContent = `${$('limiar').value}%`;
+  $('rTol').textContent = `${$('tol').value}%`;
+  $('rSuave').textContent = `${vg(+$('suave').value)} mm`;
+  const porFundo = $('modo').value === 'fundo';
+  for (const el of document.querySelectorAll('[data-de]')) {
+    el.hidden = el.dataset.de === 'fundo' ? !porFundo : porFundo;
+  }
   $('rLado').textContent = `${$('lado').value} mm`;
   $('rAltura').textContent = `${$('altura').value} mm`;
   $('rLamina').textContent = `${vg(+$('lamina').value)} mm`;
@@ -376,7 +459,7 @@ function rotulos() {
   $('rBico').textContent = `${vg(+$('bico').value, 2)} mm`;
   $('rFinura').textContent = `${vg(+$('finura').value, 2)} mm`;
 }
-document.querySelectorAll('aside input').forEach((el) =>
+document.querySelectorAll('aside input, aside select').forEach((el) =>
   el.addEventListener('input', () => { rotulos(); agendar(); }));
 document.querySelectorAll('.abas button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('.abas button').forEach((o) => o.classList.remove('ativa'));

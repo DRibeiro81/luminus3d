@@ -77,6 +77,23 @@ export function preencherFuros(m) {
 }
 
 /**
+ * Suaviza o contorno: fecha as fendas finas e come as pontinhas.
+ *
+ * Personagem de desenho tem dedo, mecha de cabelo e laço — detalhe que vira
+ * lâmina fina demais pra cortar massa e frágil demais pra durar. Engordar e
+ * depois encolher fecha fenda; encolher e depois engordar tira ponta. Os dois
+ * na sequência deixam um contorno que dá pra imprimir e cortar.
+ */
+export function suavizar(m, n) {
+  if (n <= 0) return m;
+  let x = engordar(m, n);                       // fecha fenda
+  for (let k = 0; k < n; k++) x = encolher(x);
+  for (let k = 0; k < n; k++) x = encolher(x);  // tira ponta
+  x = engordar(x, n);
+  return x;
+}
+
+/**
  * Anel em volta da borda da figura: engorda `fora` células pra cá e encolhe
  * `dentro` células pra lá; o que sobra entre os dois é a parede.
  */
