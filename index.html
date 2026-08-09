@@ -3,135 +3,128 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Luminus 3D — soluções para o mundo 3D</title>
-<meta name="description" content="Aplicativos, modelagem e impressão 3D. Transforme foto, nome ou ideia em peça pronta pra imprimir, direto no navegador.">
+<title>Luminus 3D — aplicativos, modelagem e impressão 3D</title>
+<meta name="description" content="Ecossistema completo para o mundo 3D: aplicativos que rodam no navegador, modelagem sob medida e impressão. Sua foto ou seu nome viram peça pronta pra imprimir.">
 <style>
   /* ------------------------------------------------------------------
-     Estrutura no ritmo das páginas de produto da Apple: barra fina fixa no
-     topo, herói de tela cheia e seções de uma ideia por vez, com muito
-     respiro. O código e o texto são nossos — o que veio de lá é só a ordem
-     das seções e a escala de tipografia.
+     Página clara e comercial, no ritmo de plataforma: números cedo, cada
+     produto num cartão com botão próprio, e blocos de serviço com lista de
+     benefícios. A barra do topo fica escura porque a marca é dourada sobre
+     fundo escuro — no claro ela sumiria.
      ------------------------------------------------------------------ */
   :root {
-    --bg: #12141a; --painel: #1a1d24; --linha: #2b3038;
-    --texto: #f2f4f7; --fraco: #98a0ad; --ouro: #d9a441; --ouro-claro: #f0c470;
-    --topo: 52px;
+    --papel: #f6f5f2; --branco: #fff; --tinta: #16181d; --fraco: #626a76;
+    --linha: #e3e0da; --ouro: #b8862b; --ouro-vivo: #d9a441; --escuro: #14161a;
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body {
-    margin: 0; background: var(--bg); color: var(--texto);
-    font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    -webkit-font-smoothing: antialiased; overflow-x: hidden;
+    margin: 0; background: var(--papel); color: var(--tinta);
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
   a { color: inherit; }
-  .dentro { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
-  .estreito { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+  .dentro { max-width: 1140px; margin: 0 auto; padding: 0 22px; }
 
-  /* ---- barra fixa ---- */
-  nav {
-    position: sticky; top: 0; z-index: 50; height: var(--topo);
-    background: rgba(18, 20, 26, .78); backdrop-filter: saturate(160%) blur(18px);
-    border-bottom: 1px solid rgba(255, 255, 255, .07);
-  }
-  nav .dentro { display: flex; align-items: center; gap: 26px; height: 100%; }
-  nav img { height: 20px; width: auto; display: block; }
-  nav .elos { display: flex; gap: 24px; margin-left: auto; font-size: 13px; color: var(--fraco); }
-  nav .elos a { text-decoration: none; transition: color .15s; }
-  nav .elos a:hover { color: var(--texto); }
-  @media (max-width: 720px) { nav .elos a:nth-child(n+4) { display: none; } }
+  /* ---- barra ---- */
+  nav { background: var(--escuro); position: sticky; top: 0; z-index: 50; }
+  nav .dentro { display: flex; align-items: center; gap: 22px; height: 62px; }
+  nav img { height: 22px; display: block; }
+  .elos { display: flex; gap: 22px; margin-left: auto; font-size: 14px; color: #b9c0cb; }
+  .elos a { text-decoration: none; transition: color .15s; }
+  .elos a:hover { color: #fff; }
+  @media (max-width: 860px) { .elos a:nth-child(n+3) { display: none; } }
 
-  /* ---- tipografia grande ---- */
-  h1 { font-size: clamp(40px, 8.4vw, 92px); line-height: 1.03; letter-spacing: -.03em;
-       margin: 0 0 20px; font-weight: 700; }
-  h2 { font-size: clamp(30px, 5vw, 54px); line-height: 1.08; letter-spacing: -.025em;
-       margin: 0 0 18px; font-weight: 700; }
-  h3 { font-size: clamp(22px, 3vw, 30px); line-height: 1.15; letter-spacing: -.02em; margin: 0 0 12px; }
-  .ouro { color: var(--ouro); }
-  .cabeca { font-size: 13px; letter-spacing: .2em; text-transform: uppercase;
-            color: var(--ouro); margin: 0 0 16px; font-weight: 600; }
-  .conduz { font-size: clamp(17px, 2.2vw, 22px); color: var(--fraco); max-width: 620px; }
+  /* ---- tipografia ---- */
+  h1 { font-size: clamp(34px, 5.6vw, 60px); line-height: 1.08; letter-spacing: -.028em;
+       margin: 0 0 18px; font-weight: 800; }
+  h2 { font-size: clamp(26px, 3.8vw, 40px); line-height: 1.14; letter-spacing: -.022em;
+       margin: 0 0 14px; font-weight: 800; }
+  h3 { font-size: 20px; margin: 0 0 8px; font-weight: 700; letter-spacing: -.01em; }
+  .selo { display: inline-block; font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+          font-weight: 700; color: var(--ouro); background: #f3e7cd;
+          padding: 6px 12px; border-radius: 999px; margin-bottom: 18px; }
+  .conduz { font-size: clamp(17px, 1.9vw, 20px); color: var(--fraco); }
 
-  /* ---- botões ---- */
-  .botoes { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 32px; }
-  .bt { display: inline-block; padding: 13px 26px; border-radius: 980px; text-decoration: none;
-        font-size: 15px; font-weight: 600; transition: transform .15s, background .15s; }
+  .bt { display: inline-block; padding: 13px 24px; border-radius: 10px; text-decoration: none;
+        font-size: 15px; font-weight: 700; transition: transform .15s, background .15s, border-color .15s; }
   .bt:hover { transform: translateY(-1px); }
-  .cheio { background: var(--ouro); color: #17120a; }
-  .cheio:hover { background: var(--ouro-claro); }
-  .vazio { border: 1px solid var(--linha); color: var(--texto); }
+  .cheio { background: var(--escuro); color: #fff; }
+  .cheio:hover { background: #23262e; }
+  .dourado { background: var(--ouro-vivo); color: #201703; }
+  .dourado:hover { background: #e8b75c; }
+  .vazio { border: 1.5px solid var(--linha); background: var(--branco); }
   .vazio:hover { border-color: var(--ouro); color: var(--ouro); }
+  .botoes { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 26px; }
+
+  section { padding: clamp(56px, 8vw, 92px) 0; }
 
   /* ---- herói ---- */
-  header.heroi {
-    min-height: calc(100svh - var(--topo)); display: flex; flex-direction: column;
-    align-items: center; justify-content: center; text-align: center;
-    padding: 60px 0 80px; position: relative; overflow: hidden;
-  }
-  /* halo quente atrás do nome: a marca se chama Luminus */
-  header.heroi::before {
-    content: ''; position: absolute; top: 16%; left: 50%; transform: translateX(-50%);
-    width: min(900px, 130vw); aspect-ratio: 1; border-radius: 50%;
-    background: radial-gradient(circle, rgba(217, 164, 65, .16), transparent 62%);
-    pointer-events: none;
-  }
-  header.heroi > * { position: relative; }
-  header.heroi .marca { width: min(430px, 74vw); margin-bottom: 40px; border-radius: 10px; }
-
-  /* ---- seções ---- */
-  section { padding: clamp(80px, 12vh, 140px) 0; }
-  .fita { border-top: 1px solid var(--linha); }
-
-  .tres { display: grid; gap: 20px; grid-template-columns: repeat(3, 1fr); margin-top: 48px; }
-  @media (max-width: 820px) { .tres { grid-template-columns: 1fr; } }
-  .cartao { background: var(--painel); border: 1px solid var(--linha); border-radius: 20px;
-            padding: 30px 28px; }
-  .cartao h3 { font-size: 21px; margin-bottom: 10px; }
-  .cartao p { color: var(--fraco); font-size: 15.5px; margin: 0; }
-  .num { font-size: 12px; letter-spacing: .16em; color: var(--ouro); font-weight: 700;
-         margin: 0 0 10px; }
-
-  /* ---- blocos de aplicativo, alternados ---- */
-  .app { display: grid; gap: clamp(28px, 5vw, 64px); align-items: center;
-         grid-template-columns: 1fr 1fr; padding: clamp(56px, 8vh, 96px) 0; }
-  .app:nth-of-type(even) .arte { order: 2; }
-  @media (max-width: 860px) {
-    .app { grid-template-columns: 1fr; }
-    .app:nth-of-type(even) .arte { order: 0; }
-  }
-  .arte { background: #0d0f13; border: 1px solid var(--linha); border-radius: 22px;
-          aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center;
-          padding: 22px; overflow: hidden; }
-  .arte img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
-  .app p { color: var(--fraco); margin: 0 0 22px; }
-  .saiba { color: var(--ouro); text-decoration: none; font-weight: 600; font-size: 15px; }
-  .saiba::after { content: ' ›'; }
+  .heroi { background: var(--branco); border-bottom: 1px solid var(--linha); }
+  .heroi .grade { display: grid; grid-template-columns: 1.05fr .95fr; gap: 48px; align-items: center; }
+  @media (max-width: 900px) { .heroi .grade { grid-template-columns: 1fr; } }
+  .mosaico { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .mosaico div { background: var(--papel); border: 1px solid var(--linha); border-radius: 14px;
+                 aspect-ratio: 1; display: flex; align-items: center; justify-content: center; padding: 14px; }
+  .mosaico img { max-width: 100%; max-height: 100%; object-fit: contain; }
 
   /* ---- números ---- */
-  .placar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; text-align: center; }
-  @media (max-width: 760px) { .placar { grid-template-columns: repeat(2, 1fr); } }
-  .placar b { display: block; font-size: clamp(28px, 4.4vw, 44px); letter-spacing: -.03em;
-              color: var(--ouro); line-height: 1.05; margin-bottom: 6px; }
-  .placar span { color: var(--fraco); font-size: 14px; }
+  .placar { background: var(--escuro); color: #fff; }
+  .placar .dentro { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+                    text-align: center; padding-top: 40px; padding-bottom: 40px; }
+  @media (max-width: 700px) { .placar .dentro { grid-template-columns: 1fr; } }
+  .placar b { display: block; font-size: clamp(26px, 3.6vw, 38px); color: var(--ouro-vivo);
+              letter-spacing: -.02em; }
+  .placar span { color: #aab1bd; font-size: 14.5px; }
 
-  .chamada { text-align: center; }
+  /* ---- cartões dos aplicativos ---- */
+  .quatro { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 40px; }
+  @media (max-width: 1000px) { .quatro { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .quatro { grid-template-columns: 1fr; } }
+  .app { background: var(--branco); border: 1px solid var(--linha); border-radius: 16px;
+         overflow: hidden; display: flex; flex-direction: column; transition: box-shadow .18s, transform .18s; }
+  .app:hover { box-shadow: 0 12px 34px rgba(20, 22, 26, .09); transform: translateY(-3px); }
+  .app .foto { background: var(--papel); height: 168px; display: flex; align-items: center;
+               justify-content: center; padding: 14px; border-bottom: 1px solid var(--linha); }
+  .app .foto img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .app .txt { padding: 20px; display: flex; flex-direction: column; flex: 1; }
+  .app p { color: var(--fraco); font-size: 14.5px; margin: 0 0 18px; flex: 1; }
+  .app .bt { text-align: center; }
 
-  footer { border-top: 1px solid var(--linha); padding: 54px 0 64px;
-           font-size: 13.5px; color: var(--fraco); }
-  .colunas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; margin-bottom: 38px; }
-  @media (max-width: 760px) { .colunas { grid-template-columns: repeat(2, 1fr); } }
-  .colunas h4 { color: var(--texto); font-size: 13px; margin: 0 0 12px; }
-  .colunas a { display: block; text-decoration: none; margin-bottom: 8px; transition: color .15s; }
-  .colunas a:hover { color: var(--ouro); }
-  .rodape-fim { border-top: 1px solid var(--linha); padding-top: 22px; }
+  /* ---- serviços ---- */
+  .servico { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(28px, 5vw, 56px);
+             align-items: center; background: var(--branco); border: 1px solid var(--linha);
+             border-radius: 20px; padding: clamp(26px, 4vw, 46px); margin-top: 22px; }
+  @media (max-width: 880px) { .servico { grid-template-columns: 1fr; } }
+  .servico ul { list-style: none; padding: 0; margin: 18px 0 0; }
+  .servico li { padding-left: 28px; position: relative; margin-bottom: 10px; color: var(--fraco); }
+  .servico li::before { content: '✓'; position: absolute; left: 0; color: var(--ouro);
+                        font-weight: 800; }
+  .quadro { background: var(--papel); border: 1px solid var(--linha); border-radius: 16px;
+            aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .quadro img { max-width: 100%; max-height: 100%; object-fit: contain; }
 
-  /* ---- aparecer ao rolar ---- */
-  .surge { opacity: 0; transform: translateY(22px); transition: opacity .7s, transform .7s; }
-  .surge.vista { opacity: 1; transform: none; }
-  @media (prefers-reduced-motion: reduce) {
-    html { scroll-behavior: auto; }
-    .surge { opacity: 1; transform: none; transition: none; }
-  }
+  /* ---- faixa escura ---- */
+  .faixa { background: var(--escuro); color: #fff; }
+  .faixa h2 { color: #fff; }
+  .faixa .conduz { color: #aab1bd; }
+  .faixa .tres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 38px; }
+  @media (max-width: 820px) { .faixa .tres { grid-template-columns: 1fr; } }
+  .faixa .tres div { border: 1px solid #2b3038; border-radius: 16px; padding: 24px; }
+  .faixa .tres h3 { color: #fff; }
+  .faixa .tres p { color: #aab1bd; font-size: 15px; margin: 0; }
+
+  /* ---- chamada ---- */
+  .chamada { text-align: center; background: var(--branco); border-top: 1px solid var(--linha); }
+
+  footer { background: var(--escuro); color: #98a0ad; font-size: 14px; padding: 46px 0 40px; }
+  .colunas { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 26px; }
+  @media (max-width: 760px) { .colunas { grid-template-columns: 1fr 1fr; } }
+  .colunas h4 { color: #fff; font-size: 13.5px; margin: 0 0 12px; }
+  .colunas a { display: block; text-decoration: none; margin-bottom: 8px; }
+  .colunas a:hover { color: var(--ouro-vivo); }
+  footer .marca { height: 24px; margin-bottom: 14px; }
+  .fim { border-top: 1px solid #2b3038; margin-top: 34px; padding-top: 20px; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -143,144 +136,154 @@
       <a href="#aplicativos">Aplicativos</a>
       <a href="#modelagem">Modelagem</a>
       <a href="#impressao">Impressão</a>
-      <a href="#contato">Falar com a gente</a>
+      <a href="#contato">Contato</a>
     </div>
   </div>
 </nav>
 
-<header class="heroi" id="topo">
-  <img class="marca" src="img/logo-luminus.png" alt="Luminus 3D">
-  <div class="estreito">
-    <h1>O mundo 3D,<br><span class="ouro">sem curva de aprendizado.</span></h1>
-    <p class="conduz" style="margin: 0 auto;">Aplicativos, modelagem e impressão. Você manda uma
-      foto ou escreve um nome; a gente devolve a peça pronta pra imprimir.</p>
-    <div class="botoes" style="justify-content: center;">
-      <a class="bt cheio" href="#aplicativos">Ver os aplicativos</a>
-      <a class="bt vazio" href="#contato">Pedir um projeto</a>
+<section class="heroi" id="topo">
+  <div class="dentro grade">
+    <div>
+      <span class="selo">Ecossistema 3D</span>
+      <h1>Sua foto vira peça.<br>Sem saber modelar.</h1>
+      <p class="conduz">Aplicativos que rodam no navegador, modelagem sob medida e impressão.
+        Você escolhe o que quer criar, ajusta na tela e baixa o arquivo pronto pra imprimir.</p>
+      <div class="botoes">
+        <a class="bt dourado" href="#aplicativos">Começar agora, de graça</a>
+        <a class="bt vazio" href="#contato">Pedir um projeto</a>
+      </div>
     </div>
-  </div>
-</header>
-
-<section class="fita">
-  <div class="dentro surge">
-    <p class="cabeca">O que fazemos</p>
-    <h2>Três frentes, um mundo só.</h2>
-    <p class="conduz">Tudo o que existe entre uma ideia e uma peça na mão.</p>
-
-    <div class="tres">
-      <div class="cartao">
-        <p class="num">01</p>
-        <h3>Aplicativos</h3>
-        <p>Ferramentas que rodam no navegador, sem instalar nada e sem assinatura.
-          Quem usa não precisa saber modelar.</p>
-      </div>
-      <div class="cartao">
-        <p class="num">02</p>
-        <h3>Modelagem</h3>
-        <p>Peça sob medida, desenhada do zero ou a partir do que você já tem.
-          Sai em arquivo fechado, pronto pra fatiar.</p>
-      </div>
-      <div class="cartao">
-        <p class="num">03</p>
-        <h3>Impressão</h3>
-        <p>Da unidade ao lote. A gente imprime, confere e entrega — ou te passa o
-          arquivo com os ajustes certos pra você imprimir.</p>
-      </div>
+    <div class="mosaico">
+      <div><img src="img/foto-magica.png" alt="Quadro de luz aceso com a foto de uma família"></div>
+      <div><img src="img/vaso-e-abajur.png" alt="Vaso com gomos torcidos"></div>
+      <div><img src="img/lapis-com-nome.png" alt="Peça com o nome GAEL no lápis"></div>
+      <div><img src="img/retrato-em-linhas.png" alt="Quadro de linhas"></div>
     </div>
   </div>
 </section>
 
-<section class="fita" id="aplicativos">
+<section class="placar">
   <div class="dentro">
-    <div class="surge">
-      <p class="cabeca">Aplicativos</p>
-      <h2>Quatro ferramentas.<br>Nenhuma instalação.</h2>
-      <p class="conduz">Abre no navegador, carrega a foto, ajusta e baixa o arquivo.
-        O cálculo acontece na sua máquina — nada sobe pra servidor nenhum.</p>
-    </div>
+    <div><b>4</b><span>aplicativos prontos pra usar</span></div>
+    <div><b>Sem instalar</b><span>tudo roda no seu navegador</span></div>
+    <div><b>Sem assinatura</b><span>baixe o arquivo e imprima</span></div>
+  </div>
+</section>
 
-    <div class="app surge">
-      <div class="arte"><img src="img/retrato-em-linhas.png"
-        alt="Quadro de linhas em que a imagem aparece quando você se afasta"></div>
-      <div>
-        <h3>Retrato em Linhas</h3>
-        <p>De perto são só linhas. Dá dois passos pra trás e a foto aparece. Um quadro
-          que muda conforme você se aproxima.</p>
-        <a class="saiba" href="app.html">Criar o meu</a>
+<section id="aplicativos">
+  <div class="dentro">
+    <span class="selo">Aplicativos</span>
+    <h2>Escolha o que você quer criar.</h2>
+    <p class="conduz">Cada um faz uma coisa e faz bem. Abre, carrega a foto ou escreve o nome,
+      ajusta o tamanho e baixa o STL.</p>
+
+    <div class="quatro">
+      <div class="app">
+        <div class="foto"><img src="img/retrato-em-linhas.png" alt="Quadro de linhas"></div>
+        <div class="txt">
+          <h3>Retrato em Linhas</h3>
+          <p>De perto são só linhas. Dois passos pra trás e a foto aparece.</p>
+          <a class="bt cheio" href="app.html">Criar</a>
+        </div>
       </div>
-    </div>
-
-    <div class="app surge">
-      <div class="arte"><img src="img/foto-magica.png"
-        alt="Quadro de luz aceso mostrando a foto de uma família"></div>
-      <div>
-        <h3>Foto Mágica</h3>
-        <p>Apagada, parece uma placa branca. Acendeu a luz atrás, a foto aparece inteira,
-          em tom contínuo. Vira quadro de mesa ou abajur.</p>
-        <a class="saiba" href="luz.html">Criar o meu</a>
+      <div class="app">
+        <div class="foto"><img src="img/foto-magica.png" alt="Quadro de luz aceso"></div>
+        <div class="txt">
+          <h3>Foto Mágica</h3>
+          <p>Apagada é uma placa branca. Acendeu a luz, a foto aparece inteira.</p>
+          <a class="bt cheio" href="luz.html">Criar</a>
+        </div>
       </div>
-    </div>
-
-    <div class="app surge">
-      <div class="arte"><img src="img/vaso-e-abajur.png"
-        alt="Vaso com gomos torcidos em espiral"></div>
-      <div>
-        <h3>Vaso e Abajur</h3>
-        <p>Vaso com gomos e torção, cúpula de luminária e base, no tamanho que você quiser.
-          A parede vazada desenha a luz na sala.</p>
-        <a class="saiba" href="vaso.html">Criar o meu</a>
+      <div class="app">
+        <div class="foto"><img src="img/vaso-e-abajur.png" alt="Vaso com gomos"></div>
+        <div class="txt">
+          <h3>Vaso e Abajur</h3>
+          <p>Vaso, cúpula e base no tamanho que você quiser, com gomos e torção.</p>
+          <a class="bt cheio" href="vaso.html">Criar</a>
+        </div>
       </div>
-    </div>
-
-    <div class="app surge">
-      <div class="arte"><img src="img/lapis-com-nome.png"
-        alt="Peça laranja com o nome GAEL encaixada no lápis"></div>
-      <div>
-        <h3>Lápis com Nome</h3>
-        <p>O nome da criança em letras gordas, encaixado no lápis. Com contorno de duas
-          cores, numa peça só, com uma troca de filamento.</p>
-        <a class="saiba" href="texto.html">Criar o meu</a>
+      <div class="app">
+        <div class="foto"><img src="img/lapis-com-nome.png" alt="Nome no lápis"></div>
+        <div class="txt">
+          <h3>Lápis com Nome</h3>
+          <p>O nome da criança em letras gordas, com contorno de duas cores.</p>
+          <a class="bt cheio" href="texto.html">Criar</a>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<section class="fita" id="modelagem">
-  <div class="dentro surge">
-    <p class="cabeca">Modelagem</p>
-    <h2>Se não existe,<br>a gente desenha.</h2>
-    <p class="conduz">Peça de reposição que ninguém fabrica mais, brinde com a marca do
-      cliente, encaixe que precisa entrar com folga de décimo de milímetro. Você descreve
-      ou manda a foto; volta o arquivo fechado, medido e testado.</p>
-    <div class="botoes"><a class="bt vazio" href="#contato">Contar o que preciso</a></div>
-  </div>
-</section>
+<section id="modelagem" style="padding-top: 0;">
+  <div class="dentro">
+    <div class="servico">
+      <div>
+        <span class="selo">Modelagem</span>
+        <h2>Se não existe, a gente desenha.</h2>
+        <p class="conduz">Você descreve ou manda a foto. Volta o arquivo fechado, medido e
+          testado — pronto pra fatiar, sem retrabalho.</p>
+        <ul>
+          <li>Peça de reposição que ninguém fabrica mais</li>
+          <li>Brinde e lembrancinha com a marca do cliente</li>
+          <li>Encaixe com folga conferida no milímetro</li>
+          <li>Malha fechada e validada antes de entregar</li>
+        </ul>
+        <div class="botoes"><a class="bt cheio" href="#contato">Contar o que preciso</a></div>
+      </div>
+      <div class="quadro"><img src="img/vaso-e-abajur.png" alt="Peça modelada sob medida"></div>
+    </div>
 
-<section class="fita" id="impressao">
-  <div class="dentro surge">
-    <p class="cabeca">Impressão</p>
-    <h2>Da peça única<br>ao lote.</h2>
-    <p class="conduz">A gente imprime, confere medida a medida e entrega. Se preferir
-      imprimir você mesmo, entregamos o arquivo com os ajustes certos: orientação na mesa,
-      altura de camada e onde trocar de cor.</p>
-
-    <div class="placar" style="margin-top: 60px;">
-      <div><b>4</b><span>aplicativos no ar</span></div>
-      <div><b>0,4 mm</b><span>o traço mais fino que a gente garante</span></div>
-      <div><b>STL</b><span>pronto pra fatiar, sem conversão</span></div>
-      <div><b>0</b><span>arquivos enviados pra servidor</span></div>
+    <div class="servico" id="impressao">
+      <div class="quadro"><img src="img/lapis-com-nome.png" alt="Peça impressa"></div>
+      <div>
+        <span class="selo">Impressão</span>
+        <h2>Da peça única ao lote.</h2>
+        <p class="conduz">A gente imprime, confere medida a medida e entrega. Ou te passa o
+          arquivo com os ajustes certos pra você imprimir aí.</p>
+        <ul>
+          <li>Orientação na mesa e altura de camada definidas</li>
+          <li>Onde trocar de cor, quando a peça tem duas</li>
+          <li>Conferência de medida antes de sair</li>
+          <li>Unidade, lote pequeno ou produção recorrente</li>
+        </ul>
+        <div class="botoes"><a class="bt cheio" href="#contato">Pedir orçamento</a></div>
+      </div>
     </div>
   </div>
 </section>
 
-<section class="fita" id="contato">
-  <div class="estreito chamada surge">
-    <h2>Vamos tirar sua ideia<br>do papel.</h2>
-    <p class="conduz" style="margin: 0 auto;">Conte o que você precisa e a gente responde com
-      o caminho mais curto: um dos aplicativos, um projeto sob medida ou a impressão pronta.</p>
+<section class="faixa">
+  <div class="dentro">
+    <span class="selo">Como funciona</span>
+    <h2>Três passos. Nenhum download.</h2>
+    <p class="conduz">Do jeito mais curto entre a sua ideia e a peça na mão.</p>
+    <div class="tres">
+      <div>
+        <h3>1 · Escolha e carregue</h3>
+        <p>Abra o aplicativo, mande a foto ou escreva o nome. Nada é enviado pra servidor —
+          o cálculo acontece na sua máquina.</p>
+      </div>
+      <div>
+        <h3>2 · Ajuste na tela</h3>
+        <p>Tamanho em milímetros, espessura, cor. A prévia muda na hora e o rodapé mostra
+          peso, tempo e o traço mais fino da peça.</p>
+      </div>
+      <div>
+        <h3>3 · Baixe e imprima</h3>
+        <p>Sai um STL pronto pra fatiar, sem conversão. Se preferir, a gente imprime e entrega.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="chamada" id="contato">
+  <div class="dentro">
+    <h2>Comece pelo que é de graça.</h2>
+    <p class="conduz" style="max-width: 620px; margin: 0 auto;">Os quatro aplicativos estão no ar
+      e não pedem cadastro. Se o que você precisa não está lá, escreva pra gente.</p>
     <div class="botoes" style="justify-content: center;">
-      <a class="bt cheio" href="mailto:vetorizza@gmail.com?subject=Projeto%20Luminus%203D">Falar por e-mail</a>
-      <a class="bt vazio" href="#aplicativos">Começar pelos aplicativos</a>
+      <a class="bt dourado" href="#aplicativos">Ver os aplicativos</a>
+      <a class="bt vazio" href="mailto:vetorizza@gmail.com?subject=Projeto%20Luminus%203D">Falar por e-mail</a>
     </div>
   </div>
 </section>
@@ -288,6 +291,10 @@
 <footer>
   <div class="dentro">
     <div class="colunas">
+      <div>
+        <img class="marca" src="img/logo-luminus.png" alt="Luminus 3D">
+        <p style="margin: 0; max-width: 260px;">Aplicativos, modelagem e impressão para o mundo 3D.</p>
+      </div>
       <div>
         <h4>Aplicativos</h4>
         <a href="app.html">Retrato em Linhas</a>
@@ -301,30 +308,13 @@
         <a href="#impressao">Impressão</a>
       </div>
       <div>
-        <h4>Como funciona</h4>
-        <a href="#aplicativos">Roda no navegador</a>
-        <a href="#impressao">Arquivo pronto pra fatiar</a>
-      </div>
-      <div>
         <h4>Contato</h4>
         <a href="mailto:vetorizza@gmail.com">vetorizza@gmail.com</a>
       </div>
     </div>
-    <div class="rodape-fim">Luminus 3D · soluções para o mundo 3D</div>
+    <div class="fim">Luminus 3D · aplicativos, modelagem e impressão 3D</div>
   </div>
 </footer>
 
-<script>
-  // As seções sobem de leve quando entram na tela. Uma vez só: reanimar a cada
-  // rolagem cansa numa página longa.
-  const olho = new IntersectionObserver((itens) => {
-    for (const it of itens) {
-      if (!it.isIntersecting) continue;
-      it.target.classList.add('vista');
-      olho.unobserve(it.target);
-    }
-  }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
-  document.querySelectorAll('.surge').forEach((el) => olho.observe(el));
-</script>
 </body>
 </html>
