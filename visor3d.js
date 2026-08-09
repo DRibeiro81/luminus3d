@@ -23,7 +23,7 @@ export function criarVisor(canvas, opcoes = {}) {
   const fs = `
     precision mediump float;
     varying vec3 vn, vp; varying float ve;
-    uniform int modo;          // 0 sólido, 1 acesa, 2 apagada
+    uniform int modo;          // 0 sólido, 1 acesa, 2 apagada, 3 duas cores
     uniform float espMin, espMax;
     void main() {
       vec3 n = normalize(vn);
@@ -31,6 +31,19 @@ export function criarVisor(canvas, opcoes = {}) {
       float d = max(dot(n, normalize(vec3(0.35, 0.5, 0.9))), 0.0);
       float c = max(dot(n, normalize(vec3(-0.6, -0.3, 0.4))), 0.0);
       float borda = pow(1.0 - max(dot(n, normalize(-vp)), 0.0), 3.5);
+
+      if (modo == 3) {
+        // Duas cores: o atributo de espessura chega como 1 no relevo da letra
+        // e 0 no corpo. É só pra tela — a peça sai numa malha só, e quem separa
+        // as cores é a troca de filamento na impressora.
+        // (nada de crase aqui dentro: o shader mora num template literal)
+        vec3 base = mix(vec3(0.86, 0.42, 0.16), vec3(0.94, 0.94, 0.92), step(0.5, ve));
+        vec3 cor = base * (0.34 + 0.66 * d)
+                 + vec3(0.10, 0.11, 0.14) * c
+                 + vec3(0.12, 0.12, 0.12) * borda;
+        gl_FragColor = vec4(cor, 1.0);
+        return;
+      }
 
       if (modo == 0) {
         vec3 cor = vec3(0.86, 0.70, 0.40) * (0.32 + 0.68 * d)

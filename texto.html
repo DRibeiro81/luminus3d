@@ -131,7 +131,21 @@
     </div>
 
     <div class="etapa">
-      <p class="tit"><b>3</b>Lápis</p>
+      <p class="tit"><b>3</b>Contorno</p>
+      <div class="caixa"><input type="checkbox" id="temContorno" checked>
+        <span>Letras em relevo, corpo de outra cor</span></div>
+      <div id="ctlContorno">
+        <label><div class="rot"><span>Largura do contorno</span><span id="rContorno">1,2 mm</span></div>
+          <input type="range" id="contorno" min="0.4" max="4" step="0.1" value="1.2"></label>
+        <label><div class="rot"><span>Altura da letra</span><span id="rAltLetra">2,0 mm</span></div>
+          <input type="range" id="alturaLetra" min="0.6" max="5" step="0.2" value="2"></label>
+        <p class="dica">Imprime deitado com a frente na mesa: as letras saem
+          primeiro, na cor delas, e o corpo depois. Uma troca de filamento só.</p>
+      </div>
+    </div>
+
+    <div class="etapa">
+      <p class="tit"><b>4</b>Lápis</p>
       <label><div class="rot"><span>Grossura do lápis</span><span id="rLapis">7,6 mm</span></div>
         <input type="range" id="lapis" min="5" max="12" step="0.1" value="7.6"></label>
       <label><div class="rot"><span>Folga</span><span id="rFolga">0,4 mm</span></div>
@@ -158,7 +172,7 @@
 
   <footer>
     <button id="btBaixar" disabled>Baixar STL</button>
-    <p class="dica">Imprima <b>deitado</b>, com a frente das letras na mesa. Sem suporte.</p>
+    <p class="dica" id="dicaImpressao">Imprima <b>deitado</b>, com a frente das letras na mesa. Sem suporte.</p>
   </footer>
 </aside>
 
@@ -183,6 +197,7 @@
     <div>Abraço no lápis<b id="dAperto">—</b></div>
     <div>Peso<b id="dPeso">—</b></div>
     <div>Tempo<b id="dTempo">—</b></div>
+    <div>Troca de cor<b id="dTroca">—</b></div>
     <div>Arquivo<b id="dArq">—</b></div>
   </div>
   <div id="aviso"></div>
@@ -337,6 +352,7 @@ function mascaraDoNome(texto, fonte, alturaPx, encaixeMm, alturaMm) {
 /* ---------------- cálculo ---------------- */
 function opcoes() {
   const furo = +$('lapis').value + +$('folga').value;
+  const com = $('temContorno').checked;
   return {
     mmPorPx: +$('finura').value,
     profundidade: +$('profundidade').value,
@@ -344,6 +360,8 @@ function opcoes() {
     furo,
     furoZ: +$('canalZ').value,
     gota: $('gota').checked,
+    contorno: com ? +$('contorno').value : 0,
+    alturaLetra: com ? +$('alturaLetra').value : 0,
   };
 }
 
@@ -371,9 +389,11 @@ function calcular() {
 function desenhar(r) {
   const L = r.mascara.length, C = r.mascara[0].length;
   const escala = Math.min(1600 / C, 420 / L, 6);
+  // folga em volta: sem ela o contorno sai cortado rente na borda
+  const folgaPx = r.op.contorno > 0 ? Math.ceil((r.op.contorno / r.op.mmPorPx) * escala) + 2 : 0;
   const cv = $('tela');
-  cv.width = Math.max(1, Math.round(C * escala));
-  cv.height = Math.max(1, Math.round(L * escala));
+  cv.width = Math.max(1, Math.round(C * escala)) + folgaPx * 2;
+  cv.height = Math.max(1, Math.round(L * escala)) + folgaPx * 2;
   const c = cv.getContext('2d');
   c.fillStyle = '#0f1114'; c.fillRect(0, 0, cv.width, cv.height);
 
@@ -386,17 +406,30 @@ function desenhar(r) {
   // desenhado do original em alta, não da máscara: a peça tem borda lisa e a
   // prévia tem que mostrar isso
   const a = r.alta;
-  c.imageSmoothingQuality = 'high';
-  c.globalCompositeOperation = 'source-over';
-  const tmp = document.createElement('canvas');
-  tmp.width = cv.width; tmp.height = cv.height;
-  const ct = tmp.getContext('2d');
-  ct.imageSmoothingQuality = 'high';
-  ct.drawImage(a.cv, a.x0, a.y0, a.w, a.h, 0, 0, cv.width, cv.height);
-  ct.globalCompositeOperation = 'source-in';
-  ct.fillStyle = '#d9a441';
-  ct.fillRect(0, 0, cv.width, cv.height);
-  c.drawImage(tmp, 0, 0);
+  const silhueta = (cor, raioPx) => {
+    const tmp = document.createElement('canvas');
+    tmp.width = cv.width; tmp.height = cv.height;
+    const ct = tmp.getContext('2d');
+    ct.imageSmoothingQuality = 'high';
+    // Engorda desenhando a mesma silhueta em volta de um círculo. Sai redondo,
+    // sem a escadinha que a máscara teria nesse tamanho.
+    const voltas = raioPx > 0 ? 16 : 1;
+    for (let i = 0; i < voltas; i++) {
+      const ang = (i / voltas) * Math.PI * 2;
+      const dx = raioPx * Math.cos(ang), dy = raioPx * Math.sin(ang);
+      ct.drawImage(a.cv, a.x0, a.y0, a.w, a.h,
+                   folgaPx + dx, folgaPx + dy, cv.width - folgaPx * 2, cv.height - folgaPx * 2);
+    }
+    ct.globalCompositeOperation = 'source-in';
+    ct.fillStyle = cor;
+    ct.fillRect(0, 0, cv.width, cv.height);
+    return tmp;
+  };
+  if (r.op.contorno > 0) {
+    const raioPx = (r.op.contorno / r.op.mmPorPx) * escala;
+    c.drawImage(silhueta('#b5761f', raioPx), 0, 0);
+  }
+  c.drawImage(silhueta('#f2d79a', 0), 0, 0);
 }
 
 /** O corte de lado: onde o canal fica dentro da profundidade. */
@@ -433,6 +466,10 @@ function mostrar(r) {
   const g = r.volume * DENSIDADE;
   $('dPeso').textContent = `~${g.toFixed(1)} g`;
   $('dTempo').textContent = `~${Math.max(1, Math.round(g / 0.18))} min`;
+  $('dTroca').textContent = r.trocaDeCor > 0 ? `${n(r.trocaDeCor)} mm` : 'uma cor só';
+  $('dicaImpressao').innerHTML = r.trocaDeCor > 0
+    ? `Imprima <b>deitado</b>, com a frente das letras na mesa. No fatiador, ponha uma <b>troca de filamento em ${n(r.trocaDeCor)} mm</b>: até ali é a cor da letra, depois é a do corpo.`
+    : 'Imprima <b>deitado</b>, com a frente das letras na mesa. Sem suporte.';
   $('dArq').textContent = `${(r.tris.length * 50 / 1e6).toFixed(1)} MB`;
 
   // Canal baixo demais rompe o chão da peça: em vez de furo, vira uma fenda que
@@ -461,7 +498,11 @@ function aplicar(r) {
   const em3d = vendo === '3d' && visor && visor.ok;
   $('cena').hidden = !em3d;
   $('tela').hidden = em3d;
-  if (em3d) { visor.enviar(r.tris); visor.desenhar(); } else desenhar(r);
+  if (em3d) {
+    visor.ajustar({ modo: r.op.contorno > 0 ? 3 : 0, espMin: 0, espMax: 1 });
+    visor.enviar(r.tris, r.marcas);
+    visor.desenhar();
+  } else desenhar(r);
   desenharCorte(r);
   $('btBaixar').disabled = !mostrar(r);
 }
@@ -529,6 +570,9 @@ function rotulos() {
   $('rParede').textContent = `${vg(+$('parede').value)} mm`;
   $('rBico').textContent = `${vg(+$('bico').value, 2)} mm`;
   $('rFinura').textContent = `${vg(+$('finura').value, 2)} mm`;
+  $('rContorno').textContent = `${vg(+$('contorno').value)} mm`;
+  $('rAltLetra').textContent = `${vg(+$('alturaLetra').value)} mm`;
+  $('ctlContorno').hidden = !$('temContorno').checked;
 }
 document.querySelectorAll('aside input, aside select').forEach((el) =>
   el.addEventListener('input', () => { rotulos(); agendar(); }));

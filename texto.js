@@ -83,8 +83,11 @@ export function canalEmY(op, dz) {
 export function encaixeDoCanal(op) {
   const r = op.furo / 2;
   const alcanceTras = op.gota ? r * Math.SQRT2 : r;
-  const minima = op.parede + r + alcanceTras + op.parede;
-  const furoY = Math.max(op.parede + r, op.profundidade - op.parede - alcanceTras);
+  // `inicioCorpo` é onde o corpo começa: com contorno, o relevo das letras fica
+  // na frente dele e o canal não pode invadir esse relevo.
+  const base = op.inicioCorpo || 0;
+  const minima = base + op.parede + r + alcanceTras + op.parede;
+  const furoY = Math.max(base + op.parede + r, op.profundidade - op.parede - alcanceTras);
   return { minima, furoY };
 }
 
@@ -124,6 +127,49 @@ function encolher(m) {
     saida.push(linha);
   }
   return saida;
+}
+
+/** Põe `n` células de folga em volta, pra o contorno ter pra onde crescer. */
+export function moldar(m, n) {
+  const C = m[0].length + 2 * n;
+  const vazia = () => new Uint8Array(C);
+  const saida = [];
+  for (let k = 0; k < n; k++) saida.push(vazia());
+  for (const linha of m) {
+    const nova = vazia();
+    nova.set(linha, n);
+    saida.push(nova);
+  }
+  for (let k = 0; k < n; k++) saida.push(vazia());
+  return saida;
+}
+
+/** Engorda a palavra em `n` células, pra virar a chapa de fundo colorida. */
+export function engordar(m, n) {
+  let atual = m;
+  for (let k = 0; k < n; k++) {
+    const L = atual.length, C = atual[0].length;
+    const saida = [];
+    // Alterna cruz e quadrado: só cruz engorda em losango, só quadrado engorda
+    // em quadrado. Alternando, a borda sai redonda, que é o que o olho espera
+    // em volta de uma letra.
+    const diagonal = k % 2 === 1;
+    for (let j = 0; j < L; j++) {
+      const linha = new Uint8Array(C);
+      for (let i = 0; i < C; i++) {
+        if (atual[j][i]) { linha[i] = 1; continue; }
+        const perto = (dj, di) => {
+          const y = j + dj, x = i + di;
+          return y >= 0 && y < L && x >= 0 && x < C && atual[y][x];
+        };
+        if (perto(-1, 0) || perto(1, 0) || perto(0, -1) || perto(0, 1)) linha[i] = 1;
+        else if (diagonal && (perto(-1, -1) || perto(-1, 1) || perto(1, -1) || perto(1, 1))) linha[i] = 1;
+      }
+      saida.push(linha);
+    }
+    atual = saida;
+  }
+  return atual;
 }
 
 /**
@@ -182,6 +228,18 @@ export function diferenca(A, B) {
   return saida;
 }
 
+/** Junta trechos que se encostam ou se sobrepõem. */
+export function unir(A) {
+  const ordem = [...A].sort((a, b) => a[0] - b[0]);
+  const saida = [];
+  for (const [a, b] of ordem) {
+    const ultimo = saida[saida.length - 1];
+    if (ultimo && a <= ultimo[1] + 1e-9) ultimo[1] = Math.max(ultimo[1], b);
+    else saida.push([a, b]);
+  }
+  return saida;
+}
+
 /**
  * Monta a peça como uma CASCA FECHADA, não como pilha de caixas.
  *
@@ -196,108 +254,161 @@ export function diferenca(A, B) {
  * `cobertura` é opcional (ver `bordasFinas`).
  */
 export function nomeNoLapis(op, mascara, cobertura) {
-  const L = mascara.length, C = mascara[0].length;
   const e = op.mmPorPx, D = op.profundidade;
-  const { furoY } = encaixeDoCanal(op);
-  const cfg = { ...op, furoY };
 
-  // Cada faixa de altura vira: trechos com material em X, e onde há material em
-  // Y (um pedaço só, ou dois quando o canal do lápis passa no meio).
+  // Contorno: as letras ficam em relevo, numa cor, sobre um corpo engordado em
+  // outra. Imprimindo deitado com a frente na mesa, o corpo é tudo que vem
+  // DEPOIS da altura da letra — ou seja, uma troca de filamento só, cedo.
+  const temContorno = op.contorno > 0 && op.alturaLetra > 0;
+  const yLetra = temContorno ? Math.min(op.alturaLetra, D - 1) : 0;
+  // Com contorno, a peça cresce pra fora das letras — sem folga em volta ele
+  // sairia cortado rente na borda esquerda, direita, em cima e embaixo.
+  const folga = temContorno ? Math.max(1, Math.round(op.contorno / e)) : 0;
+  const letras = folga ? moldar(mascara, folga) : mascara;
+  const mascaraCorpo = temContorno ? engordar(letras, folga) : letras;
+
+  // O canal do lápis mora no corpo, nunca no relevo das letras.
+  const L = letras.length, C = letras[0].length;
+  const cfg = { ...op, profundidade: D, inicioCorpo: yLetra };
+  const { furoY } = encaixeDoCanal(cfg);
+  cfg.furoY = furoY;
+
+  const trechos = (m, j) => corridas(m[j]).map(([c0, c1]) => {
+    // a cobertura vem da máscara original: com folga, as colunas andam `folga`
+    const cob = m === letras && cobertura ? cobertura[j] : null;
+    const [f0, f1] = bordasFinas(c0, c1, cob && { length: c1 + 1,
+      [c0]: cob[c0 - folga] === undefined ? 1 : cob[c0 - folga],
+      [c1 - 1]: cob[c1 - 1 - folga] === undefined ? 1 : cob[c1 - 1 - folga] });
+    return [f0 * e, f1 * e];
+  });
+
+  // Cada faixa de altura vira uma pilha de BLOCOS: cada um com sua fatia de Y e
+  // seu recorte em X. Sem contorno é um bloco (ou dois, com o canal no meio);
+  // com contorno, o relevo da letra e o corpo têm recortes diferentes.
   const faixas = [];
   for (let k = 0; k < L; k++) {
-    const j = L - 1 - k;                       // linha 0 da máscara é o topo
+    const j = L - 1 - k;
     const z0 = k * e, z1 = z0 + e;
-    const xs = corridas(mascara[j]).map(([c0, c1]) => {
-      const [f0, f1] = bordasFinas(c0, c1, cobertura && cobertura[j]);
-      return [f0 * e, f1 * e];
-    });
-    // dentro da faixa, o Z mais perto do centro do canal: assim o furo nunca
-    // sai menor do que o lápis precisa
-    const canal = canalEmY(cfg, Math.max(z0, Math.min(z1, op.furoZ)) - op.furoZ);
-    let ys;
-    if (!canal) ys = [[0, D]];
-    else {
-      const a = Math.min(D, Math.max(0, canal[0]));
-      const b = Math.min(D, Math.max(0, canal[1]));
-      ys = [];
-      if (a > 1e-9) ys.push([0, a]);
-      if (D - b > 1e-9) ys.push([b, D]);
+    const xsLetra = trechos(letras, j);
+    const xsCorpo = temContorno ? trechos(mascaraCorpo, j) : xsLetra;
+    const blocos = [];
+    if (temContorno && xsLetra.length) blocos.push({ y0: 0, y1: yLetra, xs: xsLetra });
+    if (xsCorpo.length) {
+      const canal = canalEmY(cfg, Math.max(z0, Math.min(z1, op.furoZ)) - op.furoZ);
+      if (!canal) blocos.push({ y0: yLetra, y1: D, xs: xsCorpo });
+      else {
+        const a = Math.min(D, Math.max(yLetra, canal[0]));
+        const b = Math.min(D, Math.max(yLetra, canal[1]));
+        if (a - yLetra > 1e-9) blocos.push({ y0: yLetra, y1: a, xs: xsCorpo });
+        if (D - b > 1e-9) blocos.push({ y0: b, y1: D, xs: xsCorpo });
+      }
     }
-    faixas.push({ z0, z1, xs, ys });
+    faixas.push({ z0, z1, blocos });
   }
 
   const tris = [];
-  const vazia = { xs: [], ys: [] };
-  // Um quadrilátero por plano, com o giro que põe a normal pro lado certo.
-  const emZ = (x0, x1, y0, y1, z, pra) => {
-    const q = [[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]];
-    if (pra < 0) q.reverse();
+  // 1 onde a peça é da cor da letra, 0 onde é do corpo. Serve pra tela pintar as
+  // duas cores; a malha em si é uma peça só, como sai da impressora.
+  const marcas = [];
+  const daLetra = (y0, y1) => (temContorno && y1 <= yLetra + 1e-9 ? 1 : 0);
+  const guardar = (q, cor) => {
     tris.push([q[0], q[1], q[2]], [q[0], q[2], q[3]]);
+    for (let i = 0; i < 6; i++) marcas.push(cor);
+  };
+  // A faixa em Y pode atravessar a fronteira entre o relevo e o corpo; aí ela
+  // vira dois quadriláteros, um de cada cor.
+  const emZ = (x0, x1, y0, y1, z, pra) => {
+    const pedaco = (a, b, cor) => {
+      if (b - a < 1e-9) return;
+      const q = [[x0, a, z], [x1, a, z], [x1, b, z], [x0, b, z]];
+      if (pra < 0) q.reverse();
+      guardar(q, cor);
+    };
+    if (temContorno && y0 < yLetra && y1 > yLetra) {
+      pedaco(y0, yLetra, 1); pedaco(yLetra, y1, 0);
+    } else pedaco(y0, y1, daLetra(y0, y1));
   };
   const emX = (y0, y1, z0, z1, x, pra) => {
     const q = [[x, y0, z0], [x, y1, z0], [x, y1, z1], [x, y0, z1]];
     if (pra < 0) q.reverse();
-    tris.push([q[0], q[1], q[2]], [q[0], q[2], q[3]]);
+    guardar(q, daLetra(y0, y1));
   };
-  const emY = (x0, x1, z0, z1, y, pra) => {
+  // A cor vem do BLOCO, não da altura: a face da frente do corpo mora
+  // exatamente em yLetra, e por altura ela seria confundida com o relevo.
+  const emY = (x0, x1, z0, z1, y, pra, cor) => {
     const q = [[x0, y, z0], [x0, y, z1], [x1, y, z1], [x1, y, z0]];
     if (pra < 0) q.reverse();
-    tris.push([q[0], q[1], q[2]], [q[0], q[2], q[3]]);
+    guardar(q, cor);
   };
 
-  for (let k = 0; k < L; k++) {
-    const f = faixas[k];
-    if (!f.xs.length) continue;
-    // paredes laterais e as faces de frente, de trás e do canal
-    for (const [x0, x1] of f.xs) {
-      for (const [y0, y1] of f.ys) {
-        emX(y0, y1, f.z0, f.z1, x0, -1);
-        emX(y0, y1, f.z0, f.z1, x1, +1);
-        emY(x0, x1, f.z0, f.z1, y0, -1);
-        emY(x0, x1, f.z0, f.z1, y1, +1);
+  // Paredes laterais e as faces viradas pra frente e pra trás de cada bloco.
+  for (const f of faixas) {
+    const b = f.blocos;
+    for (let i = 0; i < b.length; i++) {
+      for (const [x0, x1] of b[i].xs) {
+        emX(b[i].y0, b[i].y1, f.z0, f.z1, x0, -1);
+        emX(b[i].y0, b[i].y1, f.z0, f.z1, x1, +1);
       }
+      // encostado no vizinho? só sobra à mostra o que o vizinho não cobre
+      const abaixo = i > 0 && Math.abs(b[i - 1].y1 - b[i].y0) < 1e-9 ? b[i - 1].xs : [];
+      const acima = i + 1 < b.length && Math.abs(b[i + 1].y0 - b[i].y1) < 1e-9 ? b[i + 1].xs : [];
+      const cor = daLetra(b[i].y0, b[i].y1);
+      for (const [x0, x1] of diferenca(b[i].xs, abaixo)) emY(x0, x1, f.z0, f.z1, b[i].y0, -1, cor);
+      for (const [x0, x1] of diferenca(b[i].xs, acima)) emY(x0, x1, f.z0, f.z1, b[i].y1, +1, cor);
     }
   }
 
-  // Piso e teto de cada faixa: só onde a faixa vizinha NÃO acompanha. É aqui
-  // que a peça fecha quando a letra muda de largura ou o canal muda de altura.
+  // Piso e teto de cada faixa. Como o recorte em X muda de bloco pra bloco, a
+  // comparação com a faixa vizinha é feita por trecho de X: em cada trecho,
+  // pergunta-se onde há material em Y dos dois lados e fecha-se a diferença.
+  const ondeTemY = (f, x) => unir(f.blocos.filter(
+    (b) => b.xs.some(([a, c]) => x > a && x < c)).map((b) => [b.y0, b.y1]));
+
   for (let k = 0; k <= L; k++) {
-    const baixo = k > 0 ? faixas[k - 1] : vazia;
-    const cima = k < L ? faixas[k] : vazia;
-    if (!baixo.xs.length && !cima.xs.length) continue;
+    const baixo = k > 0 ? faixas[k - 1] : { blocos: [] };
+    const cima = k < L ? faixas[k] : { blocos: [] };
+    if (!baixo.blocos.length && !cima.blocos.length) continue;
     const z = k > 0 ? baixo.z1 : cima.z0;
 
-    for (const [x0, x1] of intersecao(baixo.xs, cima.xs)) {
-      for (const [y0, y1] of diferenca(baixo.ys, cima.ys)) emZ(x0, x1, y0, y1, z, +1);
-      for (const [y0, y1] of diferenca(cima.ys, baixo.ys)) emZ(x0, x1, y0, y1, z, -1);
+    const cortes = new Set();
+    for (const f of [baixo, cima]) for (const b of f.blocos) for (const [a, c] of b.xs) {
+      cortes.add(a); cortes.add(c);
     }
-    for (const [x0, x1] of diferenca(baixo.xs, cima.xs))
-      for (const [y0, y1] of baixo.ys) emZ(x0, x1, y0, y1, z, +1);
-    for (const [x0, x1] of diferenca(cima.xs, baixo.xs))
-      for (const [y0, y1] of cima.ys) emZ(x0, x1, y0, y1, z, -1);
+    const lista = [...cortes].sort((a, b) => a - b);
+    for (let i = 0; i + 1 < lista.length; i++) {
+      const x0 = lista[i], x1 = lista[i + 1];
+      if (x1 - x0 < 1e-9) continue;
+      const meio = (x0 + x1) / 2;
+      const yb = ondeTemY(baixo, meio), yc = ondeTemY(cima, meio);
+      for (const [a, c] of diferenca(yb, yc)) emZ(x0, x1, a, c, z, +1);
+      for (const [a, c] of diferenca(yc, yb)) emZ(x0, x1, a, c, z, -1);
+    }
   }
 
   let vol = 0;
-  for (const f of faixas) {
-    let lx = 0, ly = 0;
-    for (const [a, b] of f.xs) lx += b - a;
-    for (const [a, b] of f.ys) ly += b - a;
-    vol += lx * ly * e;
+  for (const f of faixas) for (const b of f.blocos) {
+    let lx = 0;
+    for (const [a, c] of b.xs) lx += c - a;
+    vol += lx * (b.y1 - b.y0) * e;
   }
 
   // Quanto do comprimento do lápis fica abraçado pela peça. É o que segura: a
   // letra "A" abre as pernas bem na altura do canal e o lápis passa livre ali.
   const jCentro = Math.min(L - 1, Math.max(0, Math.round(L - 1 - op.furoZ / e)));
   let cobertos = 0;
-  for (let i = 0; i < C; i++) if (mascara[jCentro][i]) cobertos++;
+  for (let i = 0; i < C; i++) if (mascaraCorpo[jCentro][i]) cobertos++;
 
   return {
     tris,
-    largura: C * e,
+    marcas: new Float32Array(marcas),
+    largura: mascaraCorpo[0].length * e,
     altura: L * e,
     profundidade: D,
     furoY,
-    aperto: cobertos / C,
+    // altura em que trocar o filamento, medida da mesa (a frente encosta nela)
+    trocaDeCor: temContorno ? yLetra : 0,
+    mascaraCorpo,
+    aperto: cobertos / mascaraCorpo[0].length,
     volume: vol / 1000,
   };
 }
