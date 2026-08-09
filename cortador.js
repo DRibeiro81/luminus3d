@@ -701,3 +701,133 @@ export function fecharLacunas(m, n) {
   for (let k = 0; k < n; k++) x = encolher(x);
   return x;
 }
+
+/* ================================================================
+   Descolorir: reduzir a poucas cores e pegar a divisa entre elas
+   ================================================================ */
+
+/**
+ * Reduz a imagem a `k` cores chapadas (k-médias).
+ *
+ * É o "descolore" no sentido literal: sombra, degradê e antisserrilhado somem
+ * dentro da cor mais próxima. Procurar onde a cor muda numa ilustração com
+ * sombra acha ruído em todo lugar e o traço sai picotado; entre regiões
+ * chapadas a divisa é fechada e contínua por construção.
+ */
+export function descolorir(d, C, L, k = 8, voltas = 12) {
+  const n = C * L;
+  // Sementes: a primeira é o primeiro pixel, e cada seguinte é a cor MAIS
+  // LONGE das já escolhidas. Sem sorteio, então a mesma foto dá sempre o mesmo
+  // resultado — e sem o furo de espalhar por posição, que numa imagem em faixas
+  // verticais cai tudo na mesma faixa e as sementes nascem da mesma cor.
+  const centros = [[d[0], d[1], d[2]]];
+  const longe = new Float64Array(n).fill(Infinity);
+  while (centros.length < k) {
+    const q = centros[centros.length - 1];
+    let alvo = 0, pior = -1;
+    for (let i = 0; i < n; i++) {
+      const p = i * 4;
+      const e = (d[p] - q[0]) ** 2 + (d[p+1] - q[1]) ** 2 + (d[p+2] - q[2]) ** 2;
+      if (e < longe[i]) longe[i] = e;
+      if (longe[i] > pior) { pior = longe[i]; alvo = p; }
+    }
+    if (pior <= 0) break;                    // imagem com menos cores que k
+    centros.push([d[alvo], d[alvo + 1], d[alvo + 2]]);
+  }
+  k = centros.length;
+  const rot = new Uint8Array(n);
+  for (let volta = 0; volta < voltas; volta++) {
+    const soma = centros.map(() => [0, 0, 0, 0]);
+    for (let i = 0; i < n; i++) {
+      const p = i * 4;
+      let melhor = 0, dist = Infinity;
+      for (let c = 0; c < k; c++) {
+        const q = centros[c];
+        const e = (d[p] - q[0]) ** 2 + (d[p+1] - q[1]) ** 2 + (d[p+2] - q[2]) ** 2;
+        if (e < dist) { dist = e; melhor = c; }
+      }
+      rot[i] = melhor;
+      const s = soma[melhor];
+      s[0] += d[p]; s[1] += d[p+1]; s[2] += d[p+2]; s[3]++;
+    }
+    let mexeu = false;
+    for (let c = 0; c < k; c++) {
+      if (!soma[c][3]) continue;
+      const novo = [soma[c][0] / soma[c][3], soma[c][1] / soma[c][3], soma[c][2] / soma[c][3]];
+      if (Math.abs(novo[0] - centros[c][0]) + Math.abs(novo[1] - centros[c][1])
+        + Math.abs(novo[2] - centros[c][2]) > 1) mexeu = true;
+      centros[c] = novo;
+    }
+    if (!mexeu) break;
+  }
+  return { rot, centros };
+}
+
+/**
+ * Junta os pedaços pequenos demais na cor do vizinho maior e devolve a divisa
+ * entre as regiões que sobraram.
+ *
+ * Filtrar por tamanho de REGIÃO, e não por comprimento de traço, é o que faz o
+ * controle de detalhe ter sentido: mancha de sombra some inteira, junto com o
+ * contorno dela, em vez de virar risquinho solto.
+ */
+export function divisasDeRegiao(rot, C, L, minimoCelulas) {
+  const reg = new Int32Array(C * L).fill(-1);
+  const tamanhos = [];
+  const pilha = [];
+  for (let p = 0; p < C * L; p++) {
+    if (reg[p] >= 0) continue;
+    const id = tamanhos.length;
+    let n = 0;
+    reg[p] = id; pilha.length = 0; pilha.push(p);
+    while (pilha.length) {
+      const q = pilha.pop(); n++;
+      const y = (q / C) | 0, x = q % C;
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= C || ny >= L) continue;
+        const k = ny * C + nx;
+        if (reg[k] < 0 && rot[k] === rot[q]) { reg[k] = id; pilha.push(k); }
+      }
+    }
+    tamanhos.push(n);
+  }
+
+  // pedaço pequeno adota o rótulo do vizinho de fora mais comum
+  let mudou = true, giros = 0;
+  while (mudou && giros++ < 6) {
+    mudou = false;
+    for (let p = 0; p < C * L; p++) {
+      if (tamanhos[reg[p]] >= minimoCelulas) continue;
+      const y = (p / C) | 0, x = p % C;
+      const conta = new Map();
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= C || ny >= L) continue;
+        const k = ny * C + nx;
+        // compara pela cor JÁ trocada, não pela região de origem: senão o miolo
+        // do pedaço só vê vizinho da mesma região e nunca é absorvido — some a
+        // casca de fora e fica um caroço no meio
+        if (rot[k] === rot[p]) continue;
+        conta.set(rot[k], (conta.get(rot[k]) || 0) + tamanhos[reg[k]]);
+      }
+      if (!conta.size) continue;
+      let melhor = rot[p], peso = -1;
+      for (const [cor, w] of conta) if (w > peso) { peso = w; melhor = cor; }
+      if (melhor !== rot[p]) { rot[p] = melhor; mudou = true; }
+    }
+  }
+
+  const m = [];
+  for (let j = 0; j < L; j++) {
+    const linha = new Uint8Array(C);
+    for (let i = 0; i < C; i++) {
+      const p = j * C + i;
+      const dir = i + 1 < C && rot[p + 1] !== rot[p];
+      const bai = j + 1 < L && rot[p + C] !== rot[p];
+      if (dir || bai) linha[i] = 1;
+    }
+    m.push(linha);
+  }
+  return m;
+}

@@ -150,15 +150,16 @@
         <label>
           <div class="rot"><span>Espessura da caneta</span><span id="rTraco">1,0 mm</span></div>
           <input type="range" id="traco" min="0.5" max="3" step="0.1" value="1"></label>
-        <label><div class="rot"><span>Quanto detalhe</span><span id="rDetalhe">4 mm</span></div>
-          <input type="range" id="detalhe" min="0" max="20" step="1" value="4"></label>
-        <label><div class="rot"><span>Sensibilidade</span><span id="rDet">14%</span></div>
-          <input type="range" id="limiarDet" min="3" max="45" step="1" value="14"></label>
+        <label><div class="rot"><span>Quanto detalhe</span><span id="rDetalhe">mancha &lt; 2 mm</span></div>
+          <input type="range" id="detalhe" min="0" max="12" step="1" value="2"></label>
+        <label><div class="rot"><span>Quantas cores</span><span id="rDet">6 cores</span></div>
+          <input type="range" id="limiarDet" min="2" max="12" step="1" value="6"></label>
         <div class="caixa"><input type="checkbox" id="espelhar" checked>
           <span>Espelhar o carimbo</span></div>
         <p class="dica" id="dicaCarimbo">O desenho é reduzido a <b>traço de caneta</b>: tudo sai
-          com a mesma espessura, venha de linha fina ou de mancha cheia. Sensibilidade decide o
-          quanto a cor precisa mudar pra virar traço; "quanto detalhe" joga fora os traços curtos.</p>
+          com a mesma espessura, venha de linha fina ou de mancha cheia. O desenho é
+          <b>descolorido</b> pra poucas cores chapadas e o traço é a divisa entre elas: menos
+          cores, desenho mais limpo. "Quanto detalhe" apaga a mancha menor que esse tamanho.</p>
       </div>
     </div>
 
@@ -220,7 +221,7 @@
 <script type="module">
 import { montarPorContorno, montarCarimbo, maiorPedaco, preencherFuros, suavizar,
          borrar, contornos, suavizarLinha, decimar, mover, espelhar, semBorda,
-         filtrarPequenos, afinar, ampliar, fecharLacunas } from './cortador.js';
+         filtrarPequenos, afinar, ampliar, descolorir, divisasDeRegiao } from './cortador.js';
 import { engordar, encolher } from './texto.js';
 
 /** Largura em X que uma malha ocupa, pra pôr a peça seguinte ao lado. */
@@ -396,28 +397,12 @@ function silhueta() {
  * Comparando cada célula com as vizinhas, a borda entre duas cores acende, e é
  * exatamente o que se chama de "traço" no desenho.
  */
-function bordasDeCor(d, C, L, sensibilidade) {
-  const limite = (sensibilidade / 100) * 441.7;
-  const m = [];
-  const dist = (a, b) => Math.hypot(d[a] - d[b], d[a+1] - d[b+1], d[a+2] - d[b+2]);
-  for (let j = 0; j < L; j++) {
-    const linha = new Uint8Array(C);
-    for (let i = 0; i < C; i++) {
-      const k = (j * C + i) * 4;
-      let pior = 0;
-      if (i + 1 < C) pior = Math.max(pior, dist(k, k + 4));
-      if (j + 1 < L) pior = Math.max(pior, dist(k, k + C * 4));
-      // transparência também é borda: figura recortada tem o contorno no alfa
-      if (i + 1 < C) pior = Math.max(pior, Math.abs(d[k+3] - d[k+7]) * 1.7);
-      if (j + 1 < L) pior = Math.max(pior, Math.abs(d[k+3] - d[k + C*4 + 3]) * 1.7);
-      linha[i] = pior > limite ? 1 : 0;
-    }
-    m.push(linha);
-  }
-  return m;
+function bordasDoDesenho(d, C, L, cores, minimoCelulas) {
+  const { rot } = descolorir(d, C, L, cores);
+  return divisasDeRegiao(rot, C, L, minimoCelulas);
 }
 
-function mascaraDetalhes(sil, recuoMm) {
+function mascaraDetalhes(sil, recuoMm, mmPorCelula) {
   if (!imagem || !sil.quadro) return null;
   const q = sil.quadro;
   const L = sil.mascara.length, C = sil.mascara[0].length;
@@ -431,7 +416,11 @@ function mascaraDetalhes(sil, recuoMm) {
   const py = Math.max(0, Math.min(q.L - 1, q.y0));
   const pw = Math.min(q.C - px, C), ph = Math.min(q.L - py, L);
   const d = c.getImageData(px, py, pw, ph).data;
-  const bordas = bordasDeCor(d, pw, ph, +$('limiarDet').value);
+  // Mancha menor que o pedido some INTEIRA, junto com o contorno dela. Filtrar
+  // por tamanho de região é o que faz o controle ter sentido: filtrar por
+  // comprimento de traço só picotava a linha e deixava pedaço solto.
+  const lado = Math.max(2, +$('detalhe').value / mmPorCelula);
+  const bordas = bordasDoDesenho(d, pw, ph, +$('limiarDet').value, Math.round(lado * lado));
   const m = [];
   for (let j = 0; j < L; j++) {
     const linha = new Uint8Array(C);
@@ -469,29 +458,24 @@ function calcular() {
 
   // Carimbo ao lado, no mesmo arquivo. Só sai se houver imagem de detalhe:
   // chapa lisa não carimba nada e só gastaria filamento.
-  let carimbo = null, tris = r.tris;
+  let carimbo = null, tris = r.tris, laçosDet = [];
   if ($('temCarimbo').checked) {
     const recuo = op.espessuraLamina / 2 + +$('folga').value + 0.8;
-    let md = mascaraDetalhes(s, recuo);
-    // Fecha o picotado antes de afinar. Borda por diferença de cor sai quebrada
-    // onde o desenho tem antisserrilhado, e afinar em cima disso entrega
-    // tracejado em vez de linha.
-    if (md) md = fecharLacunas(md, 2);
+    let md = mascaraDetalhes(s, recuo, op.mmPorCelula);
     // Vira traço de caneta: afina tudo até uma linha só e engorda de volta na
     // espessura pedida. Assim mancha cheia e linha fina saem iguais, e some a
     // necessidade de ficar compensando espessura em três controles.
     if (md) md = afinar(md);
     // joga fora o traço curto demais ANTES de engordar, senão engordar junta
     // cílio com sobrancelha e o filtro perde o sentido
-    const minimo = Math.round(+$('detalhe').value / op.mmPorCelula);
-    if (md && minimo > 1) md = filtrarPequenos(md, minimo);
+    // a limpeza pesada agora é por região, lá em cima; aqui só cai cisco solto
+    if (md) md = filtrarPequenos(md, 6);
     const grosso = Math.max(0, Math.round((+$('traco').value - op.mmPorCelula) / 2 / op.mmPorCelula));
     if (md && grosso > 0) md = engordar(md, grosso);
     // O traçado precisa de borrão pra não sair em escada, mas borrão come linha
     // fina. A saída é AMPLIAR a grade só do traço: com a caneta ocupando umas
     // seis células, o borrão alisa sem apagar. As coordenadas voltam divididas
     // pelo mesmo fator.
-    let laçosDet = [];
     if (md) {
       const larguraCel = Math.max(1, +$('traco').value / op.mmPorCelula);
       const k = Math.max(1, Math.min(4, Math.ceil(6 / larguraCel)));
@@ -521,7 +505,7 @@ function calcular() {
   // Medir de novo na grade dava 0,40 mm com a lâmina em 1,0 e acendia um aviso
   // falso, porque o anel de duas células some na primeira erosão.
   const L = s.mascara.length, C = s.mascara[0].length;
-  return { ...r, tris, op, silhueta: s, carimbo,
+  return { ...r, tris, op, silhueta: s, carimbo, contorno: laços, tracos: laçosDet,
            volume: r.volume + (carimbo ? carimbo.volume : 0),
            largura: C * op.mmPorCelula, profundidade: L * op.mmPorCelula, altura: op.altura,
            pedacos: laços.length,
@@ -546,15 +530,26 @@ function desenhar(r) {
     }
   }
   c.putImageData(img, 0, 0);
-  // a lâmina por cima, que é o que vira peça
-  c.strokeStyle = '#d9a441';
-  c.lineWidth = Math.max(1.5, (r.op.espessuraLamina / r.op.mmPorCelula) * escala);
-  c.beginPath();
-  for (let j = 1; j < L; j++) for (let i = 1; i < C; i++) {
-    if (m[j][i] === m[j][i - 1] && m[j][i] === m[j - 1][i]) continue;
-    c.rect(i * escala - 0.5, j * escala - 0.5, 1, 1);
-  }
-  c.stroke();
+
+  // Traça as MESMAS linhas que viram peça. Antes eu pintava célula por célula,
+  // e a prévia saía em escada mesmo com a malha lisa — quem olhava condenava
+  // uma peça que estava boa.
+  const risco = (laços, cor, mm) => {
+    c.strokeStyle = cor;
+    c.lineWidth = Math.max(1.2, (mm / r.op.mmPorCelula) * escala);
+    c.lineJoin = c.lineCap = 'round';
+    c.beginPath();
+    for (const l of laços) {
+      if (l.length < 2) continue;
+      c.moveTo(l[0][0] * escala, l[0][1] * escala);
+      for (let k = 1; k < l.length; k++) c.lineTo(l[k][0] * escala, l[k][1] * escala);
+      c.closePath();
+    }
+    c.stroke();
+  };
+  // o traço do carimbo por baixo, pra a lâmina ficar por cima onde se cruzam
+  if (r.tracos && r.tracos.length) risco(r.tracos, '#7fd4ff', 0.6);
+  risco(r.contorno || [], '#d9a441', r.op.espessuraLamina);
 }
 
 function aplicar(r) {
@@ -588,7 +583,7 @@ function mostrar(r) {
 
   const av = [];
   if (r.pedacos > 1) av.push(`A peça sai em ${r.pedacos} pedaços soltos: a figura tem furo e a lâmina de dentro não fica presa em nada. Ligue "fechar os furos de dentro".`);
-  if ($('temCarimbo').checked && !r.carimbo) av.push('Não achei traço nenhum dentro da figura. Suba a sensibilidade ou baixe o "quanto detalhe".');
+  if ($('temCarimbo').checked && !r.carimbo) av.push('Não achei traço nenhum dentro da figura. Suba o "quantas cores" ou baixe o "quanto detalhe".');
   if (r.paredeFina < +$('bico').value * 2) av.push(`Parede de ${n(r.paredeFina, 2)} mm é fina demais pra cortar massa. Engrosse a lâmina.`);
   if (r.silhueta.sobraram > 0) av.push(`Descartei ${r.silhueta.sobraram} mancha(s) solta(s) do fundo.`);
   if (Math.max(r.largura, r.profundidade) > 210) av.push('Maior que a mesa da Kobra X (220 mm).');
@@ -676,7 +671,8 @@ function rotulos() {
   $('rChapa').textContent = `${vg(+$('chapa').value)} mm`;
   $('rBotao').textContent = +$('botao').value === 0 ? 'sem botão' : `${$('botao').value} mm`;
   $('rTraco').textContent = `${vg(+$('traco').value)} mm`;
-  $('rDetalhe').textContent = +$('detalhe').value === 0 ? 'tudo' : `${$('detalhe').value} mm`;
+  $('rDet').textContent = `${$('limiarDet').value} cores`;
+  $('rDetalhe').textContent = +$('detalhe').value === 0 ? 'tudo' : `mancha < ${$('detalhe').value} mm`;
   $('ctlCarimbo').hidden = !$('temCarimbo').checked;
 }
 document.querySelectorAll('aside input, aside select').forEach((el) =>
@@ -690,7 +686,7 @@ visor = criarVisor($('visor'), { giroInicial: 0, inclinaInicial: -1.05,
                                  distInicial: 1, enquadrar: true, fov: 0.5 });
 if (!visor.ok) { vendo = 'plano'; document.querySelector('.abas').hidden = true; }
 rotulos();
-window.__cortador = { calcular, aplicar, carregarArquivo, silhueta, mascaraDetalhes,
+window.__cortador = { calcular, aplicar, carregarArquivo, silhueta, mascaraDetalhes, bordasDoDesenho,
                       visor: () => visor, ver: () => vendo };
 </script>
 </body>
