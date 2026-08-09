@@ -159,7 +159,9 @@
         <p class="dica" id="dicaCarimbo">O desenho é reduzido a <b>traço de caneta</b>: tudo sai
           com a mesma espessura, venha de linha fina ou de mancha cheia. O desenho é
           <b>descolorido</b> pra poucas cores chapadas e o traço é a divisa entre elas: menos
-          cores, desenho mais limpo. "Quanto detalhe" apaga a mancha menor que esse tamanho.</p>
+          cores, desenho mais limpo. Nada sai chapado de preto — mancha vira <b>contorno
+          vazado</b>, como página de colorir; só o que é miúdo demais pra ter furo fica cheio.
+          "Quanto detalhe" apaga a mancha menor que esse tamanho.</p>
       </div>
     </div>
 
@@ -397,9 +399,9 @@ function silhueta() {
  * Comparando cada célula com as vizinhas, a borda entre duas cores acende, e é
  * exatamente o que se chama de "traço" no desenho.
  */
-function bordasDoDesenho(d, C, L, cores, minimoCelulas, magrezaCelulas) {
+function bordasDoDesenho(d, C, L, cores, minimoCelulas, magrezaCelulas, canetaCelulas) {
   const { rot } = descolorir(d, C, L, cores);
-  return tintaDoDesenho(rot, C, L, minimoCelulas, magrezaCelulas);
+  return tintaDoDesenho(rot, C, L, minimoCelulas, magrezaCelulas, canetaCelulas);
 }
 
 function mascaraDetalhes(sil, recuoMm, mmPorCelula) {
@@ -446,7 +448,8 @@ function mascaraDetalhes(sil, recuoMm, mmPorCelula) {
   // área do DISCO do diâmetro pedido, não do quadrado: com o quadrado o filtro
   // saía 27% mais severo do que o rótulo promete
   const bordas = bordasDoDesenho(d, pw, ph, +$('limiarDet').value,
-                                 Math.round(Math.PI / 4 * lado * lado), magreza);
+                                 Math.round(Math.PI / 4 * lado * lado), magreza,
+                                 +$('traco').value / mmFina);
 
   // a silhueta na mesma grade fina, pra o recorte bater célula a célula
   const dentro = [], m = { linhas: [], cheias: [] };

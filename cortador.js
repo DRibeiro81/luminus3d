@@ -872,7 +872,7 @@ export function divisasDeRegiao(rot, C, L, minimoCelulas) {
  * E divisa de região fina não conta: onde um traço preto separa dois campos, a
  * linha de centro dele já é a marca — botar as divisas junto é que dobrava.
  */
-export function tintaDoDesenho(rot, C, L, minimoCelulas, magrezaCelulas) {
+export function tintaDoDesenho(rot, C, L, minimoCelulas, magrezaCelulas, canetaCelulas = 0) {
   const n = C * L;
   const reg = new Int32Array(n).fill(-1);
   const tam = [], cor = [], pilha = [];
@@ -939,6 +939,11 @@ export function tintaDoDesenho(rot, C, L, minimoCelulas, magrezaCelulas) {
   // célula. Disco tem área ≈ 3,14 × gordura²; traço comprido tem MUITO mais.
   // Até 6× ainda é redondo, e vale cheia, do tamanho que é.
   const ponto = (r) => magra(r) && gordura[r] >= 2 && tam[r] <= 6 * gordura[r] * gordura[r];
+  // Página de colorir não tem área preta chapada: mancha vira CONTORNO VAZADO.
+  // Só continua cheia a que não tem como ser vazada — se o diâmetro não chega a
+  // três vezes a caneta, o furo do meio fecha sozinho e vira borrão.
+  // sem caneta informada não há como saber se o furo fecha, então não vaza nada
+  const oco = (r) => canetaCelulas > 0 && ponto(r) && 2 * gordura[r] >= 3 * canetaCelulas;
 
   const finas = [], linhas = [], cheias = [];
   for (let j = 0; j < L; j++) {
@@ -947,9 +952,17 @@ export function tintaDoDesenho(rot, C, L, minimoCelulas, magrezaCelulas) {
   for (let p = 0; p < n; p++) if (magra(fim[p]) && !ponto(fim[p])) finas[(p / C) | 0][p % C] = 1;
   const centro = afinar(finas);
 
+  const naBordaDaRegiao = (p, i, j) =>
+    (i + 1 < C && fim[p+1] !== fim[p]) || (i > 0 && fim[p-1] !== fim[p]) ||
+    (j + 1 < L && fim[p+C] !== fim[p]) || (j > 0 && fim[p-C] !== fim[p]);
+
   for (let j = 0; j < L; j++) for (let i = 0; i < C; i++) {
     const p = j * C + i;
-    if (ponto(fim[p])) { cheias[j][i] = 1; continue; }
+    if (ponto(fim[p])) {
+      if (oco(fim[p])) { if (naBordaDaRegiao(p, i, j)) linhas[j][i] = 1; }
+      else cheias[j][i] = 1;
+      continue;
+    }
     if (centro[j][i]) { linhas[j][i] = 1; continue; }
     if (magra(fim[p])) continue;                       // divisa de traço não conta
     const dir = i + 1 < C && fim[p+1] !== fim[p] && !magra(fim[p+1]);
