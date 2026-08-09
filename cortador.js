@@ -681,3 +681,37 @@ export function espelhar(tris) {
     [eixo - c[0], c[1], c[2]], [eixo - b[0], b[1], b[2]], [eixo - a[0], a[1], a[2]],
   ]);
 }
+
+/**
+ * Descarta os pedaços pequenos demais de uma máscara de traço.
+ *
+ * Num desenho rico entram cílio, ruga de dedo e fio de cabelo: traços que nem
+ * imprimem nem marcam massa, e que ainda deixam o carimbo frágil. O corte é por
+ * tamanho do pedaço, não por espessura — traço fino e comprido fica.
+ */
+export function filtrarPequenos(m, minimoCelulas) {
+  if (minimoCelulas <= 1) return m;
+  const L = m.length, C = m[0].length;
+  const visto = new Uint8Array(L * C);
+  const saida = Array.from({ length: L }, () => new Uint8Array(C));
+  const pilha = [];
+  for (let j0 = 0; j0 < L; j0++) for (let i0 = 0; i0 < C; i0++) {
+    if (!m[j0][i0] || visto[j0 * C + i0]) continue;
+    const grupo = [];
+    visto[j0 * C + i0] = 1; pilha.length = 0; pilha.push(j0 * C + i0);
+    while (pilha.length) {
+      const k = pilha.pop();
+      grupo.push(k);
+      const y = (k / C) | 0, x = k % C;
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= C || ny >= L) continue;
+        const kk = ny * C + nx;
+        if (m[ny][nx] && !visto[kk]) { visto[kk] = 1; pilha.push(kk); }
+      }
+    }
+    if (grupo.length >= minimoCelulas)
+      for (const k of grupo) saida[(k / C) | 0][k % C] = 1;
+  }
+  return saida;
+}

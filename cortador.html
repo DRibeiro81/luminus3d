@@ -150,8 +150,10 @@
         <span>Gerar o carimbo junto</span></div>
       <div id="ctlCarimbo">
         <label>
-          <div class="rot"><span>Onde separa o traço</span><span id="rDet">55%</span></div>
-          <input type="range" id="limiarDet" min="10" max="90" step="1" value="55"></label>
+          <div class="rot"><span>Sensibilidade dos traços</span><span id="rDet">14%</span></div>
+          <input type="range" id="limiarDet" min="3" max="45" step="1" value="14"></label>
+        <label><div class="rot"><span>Quanto detalhe</span><span id="rDetalhe">4 mm</span></div>
+          <input type="range" id="detalhe" min="0" max="20" step="1" value="4"></label>
         <label><div class="rot"><span>Espessura do traço</span><span id="rTraco">1,0 mm</span></div>
           <input type="range" id="traco" min="0.4" max="3" step="0.1" value="1"></label>
         <label><div class="rot"><span>Folga pra entrar no corte</span><span id="rFolga">0,4 mm</span></div>
@@ -166,9 +168,10 @@
           <input type="range" id="altBotao" min="4" max="40" step="1" value="22"></label>
         <div class="caixa"><input type="checkbox" id="espelhar" checked>
           <span>Espelhar o carimbo</span></div>
-        <p class="dica" id="dicaCarimbo">Os detalhes saem da <b>mesma imagem</b>: são os traços
-          escuros de dentro da figura. A chapa desliza dentro da lâmina, então ela marca a massa
-          e empurra o biscoito pra fora.</p>
+        <p class="dica" id="dicaCarimbo">Os traços saem da <b>mesma imagem</b>: são as bordas
+          onde a cor muda — cabelo, gola, laço, olhos, boca. Área cheia vira o contorno dela, não
+          um bloco. "Quanto detalhe" joga fora os traços menores que a medida. A chapa desliza
+          dentro da lâmina: marca a massa e empurra o biscoito pra fora.</p>
       </div>
     </div>
 
@@ -220,7 +223,7 @@
 <script type="module">
 import { montarCortador, montarPorContorno, montarCarimbo, maiorPedaco, preencherFuros,
          suavizar, borrar, contornos, suavizarLinha, decimar, paredeMaisFina, anel,
-         mover, espelhar, semBorda } from './cortador.js';
+         mover, espelhar, semBorda, filtrarPequenos } from './cortador.js';
 import { engordar, encolher } from './texto.js';
 
 /** Largura em X que uma malha ocupa, pra pôr a peça seguinte ao lado. */
@@ -388,6 +391,35 @@ function silhueta() {
  * desenho não virar detalhe — ele já é a lâmina do cortador, marcá-lo de novo
  * seria repetir a borda em relevo.
  */
+/**
+ * Onde a COR muda, não onde é escuro.
+ *
+ * Num desenho colorido o brilho não separa nada: vestido azul, laço vermelho e
+ * pele têm brilho parecido, e o único escuro é o cabelo — que viraria um bloco.
+ * Comparando cada célula com as vizinhas, a borda entre duas cores acende, e é
+ * exatamente o que se chama de "traço" no desenho.
+ */
+function bordasDeCor(d, C, L, sensibilidade) {
+  const limite = (sensibilidade / 100) * 441.7;
+  const m = [];
+  const dist = (a, b) => Math.hypot(d[a] - d[b], d[a+1] - d[b+1], d[a+2] - d[b+2]);
+  for (let j = 0; j < L; j++) {
+    const linha = new Uint8Array(C);
+    for (let i = 0; i < C; i++) {
+      const k = (j * C + i) * 4;
+      let pior = 0;
+      if (i + 1 < C) pior = Math.max(pior, dist(k, k + 4));
+      if (j + 1 < L) pior = Math.max(pior, dist(k, k + C * 4));
+      // transparência também é borda: figura recortada tem o contorno no alfa
+      if (i + 1 < C) pior = Math.max(pior, Math.abs(d[k+3] - d[k+7]) * 1.7);
+      if (j + 1 < L) pior = Math.max(pior, Math.abs(d[k+3] - d[k + C*4 + 3]) * 1.7);
+      linha[i] = pior > limite ? 1 : 0;
+    }
+    m.push(linha);
+  }
+  return m;
+}
+
 function mascaraDetalhes(sil, recuoMm) {
   if (!imagem || !sil.quadro) return null;
   const q = sil.quadro;
@@ -402,17 +434,14 @@ function mascaraDetalhes(sil, recuoMm) {
   const py = Math.max(0, Math.min(q.L - 1, q.y0));
   const pw = Math.min(q.C - px, C), ph = Math.min(q.L - py, L);
   const d = c.getImageData(px, py, pw, ph).data;
-  const corte = +$('limiarDet').value / 100;
+  const bordas = bordasDeCor(d, pw, ph, +$('limiarDet').value);
   const m = [];
   for (let j = 0; j < L; j++) {
     const linha = new Uint8Array(C);
     for (let i = 0; i < C; i++) {
-      if (i >= pw || j >= ph) { linha[i] = 0; continue; }
-      const k = (j * pw + i) * 4;
-      const luz = (0.299*d[k] + 0.587*d[k+1] + 0.114*d[k+2]) / 255;
-      // detalhe só vale dentro da figura, senão vira um segundo contorno
+      // traço só vale dentro da figura, senão vira um segundo contorno
       // colado na lâmina
-      linha[i] = (luz < corte && sil.mascara[j][i]) ? 1 : 0;
+      linha[i] = (i < pw && j < ph && bordas[j][i] && sil.mascara[j][i]) ? 1 : 0;
     }
     m.push(linha);
   }
@@ -456,6 +485,10 @@ function calcular() {
   if ($('temCarimbo').checked) {
     const recuo = op.espessuraLamina / 2 + +$('folga').value + 0.8;
     let md = mascaraDetalhes(s, recuo);
+    // joga fora o traço curto demais ANTES de engordar, senão engordar junta
+    // cílio com sobrancelha e o filtro perde o sentido
+    const minimo = Math.round(+$('detalhe').value / op.mmPorCelula);
+    if (md && minimo > 1) md = filtrarPequenos(md, minimo);
     // engorda o traço até a espessura pedida: linha fina demais não marca massa
     const grosso = Math.max(0, Math.round((+$('traco').value - op.mmPorCelula) / 2 / op.mmPorCelula));
     if (md && grosso > 0) md = engordar(md, grosso);
@@ -548,7 +581,7 @@ function mostrar(r) {
   const av = [];
   if (r.pedacos > 1) av.push(`A peça sai em ${r.pedacos} pedaços soltos: a figura tem furo e as lâminas de dentro não estão presas. Ligue "aba cheia" ou "fechar os furos".`);
   if (r.porGrade) av.push('Com aba cheia a borda sai em escada: a chapa maciça ainda segue a grade.');
-  if ($('temCarimbo').checked && !r.carimbo) av.push('Não achei traço nenhum dentro da figura pra virar carimbo. Mexa em "onde separa o traço".');
+  if ($('temCarimbo').checked && !r.carimbo) av.push('Não achei traço nenhum dentro da figura. Suba a sensibilidade ou baixe o "quanto detalhe".');
   if (r.carimbo && +$('altBotao').value + +$('chapa').value < +$('altura').value + 4)
     av.push(`O botão precisa passar da lâmina pra você empurrar: some pelo menos ${Math.ceil(+$('altura').value + 4 - +$('chapa').value)} mm de altura nele.`);
   if (r.paredeFina < +$('bico').value * 2) av.push(`Parede de ${n(r.paredeFina, 2)} mm é fina demais pra cortar massa. Engrosse a lâmina.`);
@@ -639,6 +672,7 @@ function rotulos() {
   $('rBotao').textContent = +$('botao').value === 0 ? 'sem botão' : `${$('botao').value} mm`;
   $('rAltBotao').textContent = `${$('altBotao').value} mm`;
   $('rTraco').textContent = `${vg(+$('traco').value)} mm`;
+  $('rDetalhe').textContent = +$('detalhe').value === 0 ? 'tudo' : `${$('detalhe').value} mm`;
   $('ctlCarimbo').hidden = !$('temCarimbo').checked;
 }
 document.querySelectorAll('aside input, aside select').forEach((el) =>
