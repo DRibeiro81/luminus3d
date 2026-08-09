@@ -487,18 +487,58 @@ export function deslocarLinha(linha, d, e, paraFora = 1) {
     dx /= c; dy /= c;
     saida.push([p[i][0] + dy * paraFora * (d / e), p[i][1] - dx * paraFora * (d / e)]);
   }
-  saida.push(saida[0]);
-  return saida;
+
+  // Numa reentrância mais estreita que o deslocamento, os pontos passam uns
+  // pelos outros e o laço fecha num BICO virado pra dentro da área de corte —
+  // era o que impedia o carimbo de deslizar.
+  //
+  // Tirar por distância até a linha original não serve: quina entra menos por
+  // natureza deste deslocamento (é perpendicular à corda dos vizinhos, então
+  // numa quina reta ela anda d/√2), e a quina legítima ia junto. O que separa
+  // um caso do outro é o CRUZAMENTO: acha onde a linha se cruza e descarta o
+  // pedaço curto entre os dois lados, que é sempre o bico.
+  const limpo = semLacos(saida);
+  limpo.push(limpo[0]);
+  return limpo;
 }
 
-/**
- * Prisma fechado: paredes, tampa de baixo e tampa de cima.
- *
- * O contorno é virado pra anti-horário antes de qualquer coisa. `triangular`
- * já normaliza sozinho, então sem isso as tampas saíam num sentido e as paredes
- * no outro — a peça ficava com normal inconsistente e o fatiador podia ler o
- * dentro como fora.
- */
+/** Ponto onde dois trechos se cruzam, ou null. */
+function cruzamento(a, b, c, d) {
+  const r = [b[0] - a[0], b[1] - a[1]], s = [d[0] - c[0], d[1] - c[1]];
+  const den = r[0] * s[1] - r[1] * s[0];
+  if (Math.abs(den) < 1e-12) return null;
+  const t = ((c[0] - a[0]) * s[1] - (c[1] - a[1]) * s[0]) / den;
+  const u = ((c[0] - a[0]) * r[1] - (c[1] - a[1]) * r[0]) / den;
+  if (t <= 1e-9 || t >= 1 - 1e-9 || u <= 1e-9 || u >= 1 - 1e-9) return null;
+  return [a[0] + t * r[0], a[1] + t * r[1]];
+}
+
+/** Corta os laços que a linha faz sobre si mesma. */
+function semLacos(pontos) {
+  let l = pontos.slice();
+  for (let volta = 0; volta < 60; volta++) {
+    const n = l.length;
+    let achou = null;
+    for (let i = 0; i < n && !achou; i++) {
+      for (let j = i + 2; j < n; j++) {
+        if (i === 0 && j === n - 1) continue;                 // vizinhos no fecho
+        const X = cruzamento(l[i], l[(i + 1) % n], l[j], l[(j + 1) % n]);
+        if (X) { achou = [i, j, X]; break; }
+      }
+    }
+    if (!achou) break;
+    const [i, j, X] = achou;
+    const dentro = j - i, fora = n - dentro;
+    // o pedaço curto é o bico; o longo é a peça
+    const novo = dentro <= fora
+      ? [...l.slice(0, i + 1), X, ...l.slice(j + 1)]
+      : [X, ...l.slice(i + 1, j + 1)];
+    if (novo.length < 4) break;
+    l = novo;
+  }
+  return l;
+}
+
 /**
  * Costura os furos no contorno externo por uma ponte de ida e volta.
  *
