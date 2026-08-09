@@ -483,8 +483,12 @@ function calcular() {
     if (md && minimo > 1) md = filtrarPequenos(md, minimo);
     const grosso = Math.max(0, Math.round((+$('traco').value - op.mmPorCelula) / 2 / op.mmPorCelula));
     if (md && grosso > 0) md = engordar(md, grosso);
-    // borrão de raio 1, não 2: o traço é fino e o raio da silhueta o apagava
-    const laçosDet = md ? contornos(borrar(preencherFuros(md), 1))
+    // SEM borrão. O borrão existe pra dar precisão abaixo da célula no contorno
+    // da figura, que é grande; num traço de caneta de uma ou duas células ele
+    // derruba o valor abaixo da metade e a linha simplesmente não é encontrada.
+    // Resultado: quanto mais fina a caneta, mais traço sumia. Quem alisa a
+    // curva aqui é o Chaikin, que não apaga nada.
+    const laçosDet = md ? contornos(preencherFuros(md).map((l) => Float32Array.from(l)))
       .map((l) => decimar(suavizarLinha(l, 2), 0.9))
       .filter((l) => l.length > 12) : [];
     if (laçosDet.length) {
