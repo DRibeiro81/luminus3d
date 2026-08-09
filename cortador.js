@@ -622,3 +622,53 @@ export function filtrarPequenos(m, minimoCelulas) {
   }
   return saida;
 }
+
+/**
+ * Afina qualquer traço até virar uma linha de um ponto de largura.
+ *
+ * É o que transforma o desenho num traço de caneta: não importa se veio grosso,
+ * fino ou como mancha, tudo sai com a mesma espessura depois de engordar de
+ * volta. Sem isso o carimbo tinha traço gordo num lugar e sumido no outro, e o
+ * jeito de compensar era ficar mexendo em três controles.
+ *
+ * Zhang-Suen: come o contorno em duas meias-passadas, mantendo o pixel que
+ * romperia a linha se saísse. Roda até parar de mudar.
+ */
+export function afinar(m, limite = 40) {
+  const L = m.length, C = m[0].length;
+  let a = m.map((l) => Uint8Array.from(l));
+  const em = (j, i) => (j < 0 || i < 0 || j >= L || i >= C ? 0 : a[j][i]);
+
+  for (let passo = 0; passo < limite; passo++) {
+    let mudou = false;
+    for (const meia of [0, 1]) {
+      const tirar = [];
+      for (let j = 0; j < L; j++) for (let i = 0; i < C; i++) {
+        if (!a[j][i]) continue;
+        // vizinhos no sentido horário, começando pelo de cima
+        const p = [em(j-1,i), em(j-1,i+1), em(j,i+1), em(j+1,i+1),
+                   em(j+1,i), em(j+1,i-1), em(j,i-1), em(j-1,i-1)];
+        let vizinhos = 0, viradas = 0;
+        for (let k = 0; k < 8; k++) {
+          vizinhos += p[k];
+          if (!p[k] && p[(k + 1) % 8]) viradas++;
+        }
+        if (vizinhos < 2 || vizinhos > 6) continue;
+        if (viradas !== 1) continue;      // tirar aqui partiria a linha
+        const [n, ne, e, se, s, so, o, no] = p;
+        if (meia === 0) {
+          if (n * e * s !== 0 || e * s * o !== 0) continue;
+        } else {
+          if (n * e * o !== 0 || n * s * o !== 0) continue;
+        }
+        tirar.push(j * C + i);
+      }
+      if (tirar.length) {
+        mudou = true;
+        for (const k of tirar) a[(k / C) | 0][k % C] = 0;
+      }
+    }
+    if (!mudou) break;
+  }
+  return a;
+}

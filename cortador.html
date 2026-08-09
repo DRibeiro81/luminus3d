@@ -148,28 +148,17 @@
         <span>Gerar o carimbo junto</span></div>
       <div id="ctlCarimbo">
         <label>
-          <div class="rot"><span>Sensibilidade dos traços</span><span id="rDet">14%</span></div>
-          <input type="range" id="limiarDet" min="3" max="45" step="1" value="14"></label>
+          <div class="rot"><span>Espessura da caneta</span><span id="rTraco">1,0 mm</span></div>
+          <input type="range" id="traco" min="0.5" max="3" step="0.1" value="1"></label>
         <label><div class="rot"><span>Quanto detalhe</span><span id="rDetalhe">4 mm</span></div>
           <input type="range" id="detalhe" min="0" max="20" step="1" value="4"></label>
-        <label><div class="rot"><span>Espessura do traço</span><span id="rTraco">1,0 mm</span></div>
-          <input type="range" id="traco" min="0.4" max="3" step="0.1" value="1"></label>
-        <label><div class="rot"><span>Folga pra entrar no corte</span><span id="rFolga">0,4 mm</span></div>
-          <input type="range" id="folga" min="0" max="1.5" step="0.1" value="0.4"></label>
-        <label><div class="rot"><span>Altura do relevo</span><span id="rRelevo">2,0 mm</span></div>
-          <input type="range" id="relevo" min="0.6" max="4" step="0.2" value="2"></label>
-        <label><div class="rot"><span>Espessura da chapa</span><span id="rChapa">3,0 mm</span></div>
-          <input type="range" id="chapa" min="1.5" max="6" step="0.5" value="3"></label>
-        <label><div class="rot"><span>Botão de apertar</span><span id="rBotao">14 mm</span></div>
-          <input type="range" id="botao" min="0" max="30" step="1" value="14"></label>
-        <label><div class="rot"><span>Altura do botão</span><span id="rAltBotao">22 mm</span></div>
-          <input type="range" id="altBotao" min="4" max="40" step="1" value="22"></label>
+        <label><div class="rot"><span>Sensibilidade</span><span id="rDet">14%</span></div>
+          <input type="range" id="limiarDet" min="3" max="45" step="1" value="14"></label>
         <div class="caixa"><input type="checkbox" id="espelhar" checked>
           <span>Espelhar o carimbo</span></div>
-        <p class="dica" id="dicaCarimbo">Os traços saem da <b>mesma imagem</b>: são as bordas
-          onde a cor muda — cabelo, gola, laço, olhos, boca. Área cheia vira o contorno dela, não
-          um bloco. "Quanto detalhe" joga fora os traços menores que a medida. A chapa desliza
-          dentro da lâmina: marca a massa e empurra o biscoito pra fora.</p>
+        <p class="dica" id="dicaCarimbo">O desenho é reduzido a <b>traço de caneta</b>: tudo sai
+          com a mesma espessura, venha de linha fina ou de mancha cheia. Sensibilidade decide o
+          quanto a cor precisa mudar pra virar traço; "quanto detalhe" joga fora os traços curtos.</p>
       </div>
     </div>
 
@@ -180,6 +169,16 @@
       <label><div class="rot"><span>Finura da malha</span><span id="rFinura">0,4 mm</span></div>
         <input type="range" id="finura" min="0.2" max="0.8" step="0.05" value="0.4"></label>
       <p class="dica">Finura menor deixa a borda mais lisa e o arquivo maior.</p>
+      <label><div class="rot"><span>Folga do carimbo no corte</span><span id="rFolga">0,4 mm</span></div>
+        <input type="range" id="folga" min="0" max="1.5" step="0.1" value="0.4"></label>
+      <label><div class="rot"><span>Altura do relevo</span><span id="rRelevo">2,0 mm</span></div>
+        <input type="range" id="relevo" min="0.6" max="4" step="0.2" value="2"></label>
+      <label><div class="rot"><span>Espessura da chapa</span><span id="rChapa">3,0 mm</span></div>
+        <input type="range" id="chapa" min="1.5" max="6" step="0.5" value="3"></label>
+      <label style="margin-bottom:0"><div class="rot"><span>Botão de apertar</span><span id="rBotao">14 mm</span></div>
+        <input type="range" id="botao" min="0" max="30" step="1" value="14"></label>
+      <p class="dica">A altura do botão é calculada sozinha pra ele passar da lâmina —
+        sem isso não dá pra empurrar o biscoito pra fora.</p>
     </details>
   </div>
 
@@ -221,7 +220,7 @@
 <script type="module">
 import { montarPorContorno, montarCarimbo, maiorPedaco, preencherFuros, suavizar,
          borrar, contornos, suavizarLinha, decimar, mover, espelhar, semBorda,
-         filtrarPequenos } from './cortador.js';
+         filtrarPequenos, afinar } from './cortador.js';
 import { engordar, encolher } from './texto.js';
 
 /** Largura em X que uma malha ocupa, pra pôr a peça seguinte ao lado. */
@@ -474,11 +473,14 @@ function calcular() {
   if ($('temCarimbo').checked) {
     const recuo = op.espessuraLamina / 2 + +$('folga').value + 0.8;
     let md = mascaraDetalhes(s, recuo);
+    // Vira traço de caneta: afina tudo até uma linha só e engorda de volta na
+    // espessura pedida. Assim mancha cheia e linha fina saem iguais, e some a
+    // necessidade de ficar compensando espessura em três controles.
+    if (md) md = afinar(md);
     // joga fora o traço curto demais ANTES de engordar, senão engordar junta
     // cílio com sobrancelha e o filtro perde o sentido
     const minimo = Math.round(+$('detalhe').value / op.mmPorCelula);
     if (md && minimo > 1) md = filtrarPequenos(md, minimo);
-    // engorda o traço até a espessura pedida: linha fina demais não marca massa
     const grosso = Math.max(0, Math.round((+$('traco').value - op.mmPorCelula) / 2 / op.mmPorCelula));
     if (md && grosso > 0) md = engordar(md, grosso);
     // borrão de raio 1, não 2: o traço é fino e o raio da silhueta o apagava
@@ -490,7 +492,9 @@ function calcular() {
         mmPorCelula: op.mmPorCelula, folga: +$('folga').value,
         espessuraLamina: op.espessuraLamina,
         relevo: +$('relevo').value, espessuraChapa: +$('chapa').value,
-        botao: +$('botao').value, alturaBotao: +$('altBotao').value,
+        botao: +$('botao').value,
+        // o botão precisa passar da lâmina, senão não dá pra empurrar
+        alturaBotao: +$('altura').value + 8 - +$('chapa').value,
       }, laços[0], laçosDet);
       let peça = $('espelhar').checked ? espelhar(carimbo.tris) : carimbo.tris;
       const largura = C0(r.tris);
@@ -570,8 +574,6 @@ function mostrar(r) {
   const av = [];
   if (r.pedacos > 1) av.push(`A peça sai em ${r.pedacos} pedaços soltos: a figura tem furo e a lâmina de dentro não fica presa em nada. Ligue "fechar os furos de dentro".`);
   if ($('temCarimbo').checked && !r.carimbo) av.push('Não achei traço nenhum dentro da figura. Suba a sensibilidade ou baixe o "quanto detalhe".');
-  if (r.carimbo && +$('altBotao').value + +$('chapa').value < +$('altura').value + 4)
-    av.push(`O botão precisa passar da lâmina pra você empurrar: some pelo menos ${Math.ceil(+$('altura').value + 4 - +$('chapa').value)} mm de altura nele.`);
   if (r.paredeFina < +$('bico').value * 2) av.push(`Parede de ${n(r.paredeFina, 2)} mm é fina demais pra cortar massa. Engrosse a lâmina.`);
   if (r.silhueta.sobraram > 0) av.push(`Descartei ${r.silhueta.sobraram} mancha(s) solta(s) do fundo.`);
   if (Math.max(r.largura, r.profundidade) > 210) av.push('Maior que a mesa da Kobra X (220 mm).');
@@ -658,7 +660,6 @@ function rotulos() {
   $('rRelevo').textContent = `${vg(+$('relevo').value)} mm`;
   $('rChapa').textContent = `${vg(+$('chapa').value)} mm`;
   $('rBotao').textContent = +$('botao').value === 0 ? 'sem botão' : `${$('botao').value} mm`;
-  $('rAltBotao').textContent = `${$('altBotao').value} mm`;
   $('rTraco').textContent = `${vg(+$('traco').value)} mm`;
   $('rDetalhe').textContent = +$('detalhe').value === 0 ? 'tudo' : `${$('detalhe').value} mm`;
   $('ctlCarimbo').hidden = !$('temCarimbo').checked;
