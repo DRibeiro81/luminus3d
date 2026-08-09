@@ -349,10 +349,18 @@ export function montarPorContorno(op, laços) {
   const alturaFio = Math.min(op.fio || 0, op.altura - op.alturaAba - 0.6);
   const zFio = op.altura - Math.max(0, alturaFio);
   // (deslocamento pra fora, altura). Deslocamento negativo entra pra dentro.
+  //
+  // A ABA SAIU DAQUI. Ela é o maior deslocamento da peça — cinco milímetros pra
+  // fora — e numa reentrância do desenho ela dobra sobre si mesma. Medido na
+  // Minnie: 14 cruzamentos a 5,5 mm contra ZERO na parede da lâmina, a 0,5 mm.
+  // A dobra aparecia como um bico virado pra dentro da área de corte.
+  //
+  // Aqui a fita é montada por pares de índice, então não dá pra limpar o
+  // cruzamento sem embaralhar a costura. A aba virou sólido próprio, logo
+  // abaixo — sólidos se sobrepõem sem problema nesta peça, e aí ela pode ser
+  // limpa em separado.
   const perfil = [
-    [meia + op.larguraAba, 0],
-    [meia + op.larguraAba, op.alturaAba],
-    [meia, op.alturaAba],
+    [meia, 0],
     [meia, zFio],
     [Math.max(meia * 0.3, 0.12), op.altura],
   ];
@@ -397,6 +405,22 @@ export function montarPorContorno(op, laços) {
       const topo = perfil[perfil.length - 1][0];
       quad(P(i, dentro, op.altura), P(i, topo, op.altura),
            P(k, topo, op.altura), P(k, dentro, op.altura));
+    }
+  }
+
+  // A aba, como sólido próprio e com furo: por fora o contorno alargado, por
+  // dentro a parede da lâmina. Os dois passam pelo deslocamento que corta laço,
+  // então a dobra da reentrância some em vez de virar bico.
+  if (op.larguraAba > 0 && op.alturaAba > 0) {
+    for (const bruto of laços) {
+      if (bruto.length < 9) continue;
+      const fora = areaComSinal(bruto) > 0 ? 1 : -1;
+      const porFora = deslocarLinha(bruto, meia + op.larguraAba, e, fora);
+      // entra um tico a mais que a lâmina: encostar exato faz malha não-manifold
+      const porDentro = deslocarLinha(bruto, -(meia + 0.2), e, fora);
+      const t = [];
+      prisma(t, porFora, e, 0, op.alturaAba, [porDentro]);
+      anexar(tris, fechar(t));
     }
   }
 
@@ -511,6 +535,22 @@ function cruzamento(a, b, c, d) {
   const u = ((c[0] - a[0]) * r[1] - (c[1] - a[1]) * r[0]) / den;
   if (t <= 1e-9 || t >= 1 - 1e-9 || u <= 1e-9 || u >= 1 - 1e-9) return null;
   return [a[0] + t * r[0], a[1] + t * r[1]];
+}
+
+/**
+ * Tira do contorno as reentrâncias mais estreitas que `r`.
+ *
+ * Entra `r` pra dentro e volta `r` pra fora — abertura, no vocabulário de forma.
+ * O que não tem largura pra caber vira uma corda reta e some.
+ *
+ * É preciso fazer isso no CONTORNO, não no deslocamento: a lâmina é montada com
+ * o deslocamento calculado vértice a vértice lá dentro do montador, e limpar só
+ * a saída do deslocarLinha não alcança ela. O bico virado pra dentro da área de
+ * corte nascia exatamente aí.
+ */
+export function abrirContorno(linha, r, e) {
+  if (r <= 0) return linha;
+  return deslocarLinha(deslocarLinha(linha, -r, e, 1), r, e, 1);
 }
 
 /** Corta os laços que a linha faz sobre si mesma. */

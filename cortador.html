@@ -222,7 +222,7 @@
 
 <script type="module">
 import { montarPorContorno, montarCarimbo, maiorPedaco, preencherFuros, suavizar,
-         borrar, contornos, suavizarLinha, decimar, mover, espelhar, semBorda, deslocarLinha,
+         borrar, contornos, suavizarLinha, decimar, mover, espelhar, semBorda, deslocarLinha, abrirContorno,
          filtrarPequenos, afinar, descolorir, tintaDoDesenho, preencherPoligono } from './cortador.js';
 import { engordar, encolher } from './texto.js';
 
@@ -489,6 +489,11 @@ function calcular() {
   const campo = borrar(s.mascara, 2);
   const laços = contornos(campo)
     .map((l) => decimar(suavizarLinha(l, 2), 0.9))
+    // Reentrância mais estreita que a lâmina não tem como ser cortada, e virava
+    // um bico virado pra dentro da área de corte que travava o carimbo. Aqui ela
+    // some do contorno, antes de virar peça — e some do carimbo e da chapa
+    // junto, porque todo o resto sai daqui.
+    .map((l) => abrirContorno(l, +$('lamina').value / 2 + 0.1, s.mmPorCelula))
     .filter((l) => l.length > 12);
   if (!laços.length) return { vazio: true };
   const r = montarPorContorno(op, laços);
