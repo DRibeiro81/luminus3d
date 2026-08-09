@@ -139,9 +139,7 @@
         <input type="range" id="alturaAba" min="1" max="6" step="0.5" value="2.5"></label>
       <label><div class="rot"><span>Fio de corte afinado</span><span id="rFio">2,0 mm</span></div>
         <input type="range" id="fio" min="0" max="5" step="0.5" value="2"></label>
-      <div class="caixa"><input type="checkbox" id="abaCheia"><span>Aba cheia (vira carimbo)</span></div>
-      <p class="dica" id="dicaAba">A aba é o que você aperta com a mão. Cheia, ela também amarra
-        as lâminas de dentro quando a figura tem furo.</p>
+      <p class="dica" id="dicaAba">A aba é o que você aperta com a mão.</p>
     </div>
 
     <div class="etapa">
@@ -221,9 +219,9 @@
 </main>
 
 <script type="module">
-import { montarCortador, montarPorContorno, montarCarimbo, maiorPedaco, preencherFuros,
-         suavizar, borrar, contornos, suavizarLinha, decimar, paredeMaisFina, anel,
-         mover, espelhar, semBorda, filtrarPequenos } from './cortador.js';
+import { montarPorContorno, montarCarimbo, maiorPedaco, preencherFuros, suavizar,
+         borrar, contornos, suavizarLinha, decimar, mover, espelhar, semBorda,
+         filtrarPequenos } from './cortador.js';
 import { engordar, encolher } from './texto.js';
 
 /** Largura em X que uma malha ocupa, pra pôr a peça seguinte ao lado. */
@@ -462,16 +460,7 @@ function calcular() {
     espessuraLamina: +$('lamina').value,
     altura: +$('altura').value,
     fio: +$('fio').value,
-    abaCheia: $('abaCheia').checked,
   };
-  // Aba cheia continua pela grade: ela é uma chapa maciça, e chapa exige
-  // triangular polígono com furo — coisa pra outra rodada. Sem ela, que é o
-  // caso comum, a peça sai do contorno traçado e a borda fica lisa.
-  if (op.abaCheia) {
-    const r = montarCortador(op, s.mascara);
-    return { ...r, op, silhueta: s, porGrade: true };
-  }
-
   const campo = borrar(s.mascara, 2);
   const laços = contornos(campo)
     .map((l) => decimar(suavizarLinha(l, 2), 0.9))
@@ -513,7 +502,7 @@ function calcular() {
   // Medir de novo na grade dava 0,40 mm com a lâmina em 1,0 e acendia um aviso
   // falso, porque o anel de duas células some na primeira erosão.
   const L = s.mascara.length, C = s.mascara[0].length;
-  return { ...r, tris, op, silhueta: s, porGrade: false, carimbo,
+  return { ...r, tris, op, silhueta: s, carimbo,
            volume: r.volume + (carimbo ? carimbo.volume : 0),
            largura: C * op.mmPorCelula, profundidade: L * op.mmPorCelula, altura: op.altura,
            pedacos: laços.length,
@@ -579,8 +568,7 @@ function mostrar(r) {
   $('elCalc').href = `calculadora.html?peso=${g.toFixed(1)}`;
 
   const av = [];
-  if (r.pedacos > 1) av.push(`A peça sai em ${r.pedacos} pedaços soltos: a figura tem furo e as lâminas de dentro não estão presas. Ligue "aba cheia" ou "fechar os furos".`);
-  if (r.porGrade) av.push('Com aba cheia a borda sai em escada: a chapa maciça ainda segue a grade.');
+  if (r.pedacos > 1) av.push(`A peça sai em ${r.pedacos} pedaços soltos: a figura tem furo e a lâmina de dentro não fica presa em nada. Ligue "fechar os furos de dentro".`);
   if ($('temCarimbo').checked && !r.carimbo) av.push('Não achei traço nenhum dentro da figura. Suba a sensibilidade ou baixe o "quanto detalhe".');
   if (r.carimbo && +$('altBotao').value + +$('chapa').value < +$('altura').value + 4)
     av.push(`O botão precisa passar da lâmina pra você empurrar: some pelo menos ${Math.ceil(+$('altura').value + 4 - +$('chapa').value)} mm de altura nele.`);

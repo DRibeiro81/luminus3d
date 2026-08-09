@@ -161,104 +161,11 @@ export function paredeMaisFina(anelMascara, mmPorCelula) {
 }
 
 /* ================================================================
-   Montagem da malha
+   A montagem pela grade foi retirada em 09/08.
+   Ela extrudava célula por célula e deixava a borda em escada; a "aba cheia",
+   único lugar que ainda a usava, saiu junto porque o dono não gostou do
+   resultado. Tudo sai do contorno traçado agora.
    ================================================================ */
-
-/**
- * Extruda uma máscara entre duas alturas, emitindo só as faces que ficam à
- * mostra. `abaixo` e `acima` são as máscaras das faixas vizinhas: onde elas
- * cobrem, não existe tampa.
- */
-function extrudar(tris, m, e, z0, z1, abaixo, acima) {
-  const L = m.length, C = m[0].length;
-  const X = (i) => i * e, Y = (j) => (L - j) * e;
-  const quad = (a, b, c, d) => { tris.push([a, b, c], [a, c, d]); };
-  const dentro = (mm, j, i) => j >= 0 && j < L && i >= 0 && i < C && mm && mm[j][i];
-
-  for (let j = 0; j < L; j++) {
-    for (let i = 0; i < C; i++) {
-      if (!m[j][i]) continue;
-      const x0 = X(i), x1 = X(i + 1), y1 = Y(j), y0 = Y(j + 1);
-      // paredes: só onde o vizinho do lado está vazio
-      if (!dentro(m, j, i - 1))
-        quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]);
-      if (!dentro(m, j, i + 1))
-        quad([x1, y1, z0], [x1, y1, z1], [x1, y0, z1], [x1, y0, z0]);
-      if (!dentro(m, j - 1, i))
-        quad([x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]);
-      if (!dentro(m, j + 1, i))
-        quad([x1, y0, z0], [x1, y0, z1], [x0, y0, z1], [x0, y0, z0]);
-      // tampas: só onde a faixa vizinha não cobre
-      if (!dentro(abaixo, j, i))
-        quad([x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0]);
-      if (!dentro(acima, j, i))
-        quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]);
-    }
-  }
-}
-
-/**
- * Monta o cortador inteiro.
- *
- * `op`: mmPorCelula, larguraAba, alturaAba, espessuraLamina, altura, fio.
- * As faixas, de baixo pra cima: aba larga na mesa, lâmina, e o fio de corte
- * mais fino no topo.
- */
-export function montarCortador(op, mascara) {
-  const e = op.mmPorCelula;
-  const cel = (mm) => Math.max(1, Math.round(mm / e));
-
-  const meia = cel(op.espessuraLamina) / 2;
-  const foraLamina = Math.max(1, Math.round(meia));
-  const dentroLamina = Math.max(1, Math.round(meia));
-
-  const lamina = anel(mascara, foraLamina, dentroLamina);
-  // Figura com furo gera um anel de fora e outro em volta do furo, e o de
-  // dentro sai SOLTO — cai da peça. A aba cheia (a silhueta inteira, não só a
-  // borda) amarra os dois. Vira cortador com carimbo, que é como se resolve
-  // isso de verdade.
-  const aba = op.abaCheia
-    ? engordar(mascara, foraLamina + cel(op.larguraAba))
-    : anel(mascara, foraLamina + cel(op.larguraAba), dentroLamina);
-  const fioCel = Math.max(1, Math.round(cel(op.espessuraLamina) * 0.35));
-  const fio = op.fio > 0 ? anel(mascara, fioCel, fioCel) : lamina;
-
-  const zAba = op.alturaAba;
-  const zFio = Math.max(zAba + 0.6, op.altura - (op.fio || 0));
-  const faixas = [
-    { m: aba,    z0: 0,    z1: zAba },
-    { m: lamina, z0: zAba, z1: zFio },
-    { m: fio,    z0: zFio, z1: op.altura },
-  ].filter((f) => f.z1 - f.z0 > 1e-6);
-
-  const tris = [];
-  for (let k = 0; k < faixas.length; k++) {
-    const f = faixas[k];
-    extrudar(tris, f.m, e, f.z0, f.z1,
-             k > 0 ? faixas[k - 1].m : null,
-             k + 1 < faixas.length ? faixas[k + 1].m : null);
-  }
-
-  let celulas = 0;
-  for (const f of faixas) {
-    let n = 0;
-    for (const l of f.m) for (const v of l) if (v) n++;
-    celulas += n * (f.z1 - f.z0);
-  }
-
-  const L = mascara.length, C = mascara[0].length;
-  return {
-    tris,
-    largura: C * e,
-    profundidade: L * e,
-    altura: op.altura,
-    // pedaços da PEÇA, não da lâmina: com aba cheia tudo vira um corpo só
-    pedacos: pedacos(op.abaCheia ? aba : lamina),
-    aneis: pedacos(lamina),
-    paredeFina: paredeMaisFina(lamina, e),
-    volume: celulas * e * e / 1000,
-  };
-}
 
 /* ================================================================
    Contorno traçado: a lâmina deixa de seguir a grade
