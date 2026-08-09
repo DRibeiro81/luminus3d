@@ -12,7 +12,7 @@
 // parede vertical, sem apoio.
 
 import { engordar, encolher, pedacos, corridas } from './texto.js';
-import { anexar, volume } from './geometria.js';
+import { anexar, volume, fechar } from './geometria.js';
 
 const vazia = (L, C) => Array.from({ length: L }, () => new Uint8Array(C));
 
@@ -472,4 +472,156 @@ export function montarPorContorno(op, laços) {
   for (const l of laços) for (let i = 0; i < l.length - 1; i++)
     comprimento += Math.hypot(l[i+1][0]-l[i][0], l[i+1][1]-l[i][1]) * e;
   return { tris, comprimento, volume: volume(tris) / 1000, laços: laços.length };
+}
+
+/**
+ * Recorta um polígono em triângulos (corte de orelha).
+ *
+ * Precisa disso pra chapa maciça: a lâmina é um anel e sai de varredura, mas o
+ * carimbo é preenchido, e preenchimento exige triangular de verdade. Vale só
+ * pra polígono simples, sem furo — no carimbo os furos são fechados de
+ * propósito, então basta.
+ */
+export function triangular(poli) {
+  const p = poli.slice();
+  if (p.length > 3 && p[0][0] === p[p.length - 1][0] && p[0][1] === p[p.length - 1][1]) p.pop();
+  const n = p.length;
+  if (n < 3) return [];
+
+  let area2 = 0;
+  for (let i = 0; i < n; i++) {
+    const a = p[i], b = p[(i + 1) % n];
+    area2 += a[0] * b[1] - b[0] * a[1];
+  }
+  // anti-horário: o teste de orelha abaixo assume esse sentido
+  const ordem = [];
+  for (let i = 0; i < n; i++) ordem.push(area2 < 0 ? n - 1 - i : i);
+
+  const cruz = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const dentroDoTri = (a, b, c, q) =>
+    cruz(a, b, q) >= 0 && cruz(b, c, q) >= 0 && cruz(c, a, q) >= 0;
+
+  const restam = ordem.slice();
+  const saida = [];
+  let travas = 0;
+  while (restam.length > 3 && travas < restam.length * 3) {
+    let cortou = false;
+    for (let i = 0; i < restam.length; i++) {
+      const ia = restam[(i - 1 + restam.length) % restam.length];
+      const ib = restam[i];
+      const ic = restam[(i + 1) % restam.length];
+      const a = p[ia], b = p[ib], c = p[ic];
+      if (cruz(a, b, c) <= 0) continue;            // canto pra dentro, não é orelha
+      let limpo = true;
+      for (const k of restam) {
+        if (k === ia || k === ib || k === ic) continue;
+        if (dentroDoTri(a, b, c, p[k])) { limpo = false; break; }
+      }
+      if (!limpo) continue;
+      saida.push([a, b, c]);
+      restam.splice(i, 1);
+      cortou = true; travas = 0;
+      break;
+    }
+    if (!cortou) { travas++; restam.push(restam.shift()); }
+  }
+  if (restam.length === 3) saida.push([p[restam[0]], p[restam[1]], p[restam[2]]]);
+  return saida;
+}
+
+/** Empurra uma malha inteira no plano, pra pôr duas peças lado a lado. */
+export function mover(tris, dx, dy) {
+  return tris.map((t) => t.map((v) => [v[0] + dx, v[1] + dy, v[2]]));
+}
+
+/** Empurra um contorno `d` mm pra dentro (negativo) ou pra fora (positivo). */
+export function deslocarLinha(linha, d, e, paraFora = 1) {
+  const p = linha.slice(0, -1);
+  const n = p.length;
+  const saida = [];
+  for (let i = 0; i < n; i++) {
+    const a = p[(i - 1 + n) % n], b = p[(i + 1) % n];
+    let dx = b[0] - a[0], dy = b[1] - a[1];
+    const c = Math.hypot(dx, dy) || 1;
+    dx /= c; dy /= c;
+    saida.push([p[i][0] + dy * paraFora * (d / e), p[i][1] - dx * paraFora * (d / e)]);
+  }
+  saida.push(saida[0]);
+  return saida;
+}
+
+/**
+ * Prisma fechado: paredes, tampa de baixo e tampa de cima.
+ *
+ * O contorno é virado pra anti-horário antes de qualquer coisa. `triangular`
+ * já normaliza sozinho, então sem isso as tampas saíam num sentido e as paredes
+ * no outro — a peça ficava com normal inconsistente e o fatiador podia ler o
+ * dentro como fora.
+ */
+function prisma(tris, linha, e, z0, z1) {
+  let p = linha.slice(0, -1);
+  const n = p.length;
+  if (n < 3) return;
+  if (areaComSinal([...p, p[0]]) < 0) p = p.slice().reverse();
+  const V = (i, z) => [p[i][0] * e, p[i][1] * e, z];
+  for (let i = 0; i < n; i++) {
+    const k = (i + 1) % n;
+    tris.push([V(i, z0), V(k, z0), V(k, z1)], [V(i, z0), V(k, z1), V(i, z1)]);
+  }
+  for (const [a, b, c] of triangular(linha)) {
+    tris.push([[a[0]*e, a[1]*e, z1], [b[0]*e, b[1]*e, z1], [c[0]*e, c[1]*e, z1]]);
+    tris.push([[a[0]*e, a[1]*e, z0], [c[0]*e, c[1]*e, z0], [b[0]*e, b[1]*e, z0]]);
+  }
+}
+
+/** Cilindro fechado, pro botão de apertar. */
+function cilindro(tris, cx, cy, raio, z0, z1, lados = 48) {
+  const P = (i, z) => {
+    const a = (i / lados) * Math.PI * 2;
+    return [cx + raio * Math.cos(a), cy + raio * Math.sin(a), z];
+  };
+  for (let i = 0; i < lados; i++) {
+    const k = (i + 1) % lados;
+    tris.push([P(i, z0), P(k, z0), P(k, z1)], [P(i, z0), P(k, z1), P(i, z1)]);
+    tris.push([[cx, cy, z1], P(i, z1), P(k, z1)]);
+    tris.push([[cx, cy, z0], P(k, z0), P(i, z0)]);
+  }
+}
+
+/**
+ * Carimbo: a chapa que entra no biscoito já cortado e imprime os detalhes.
+ *
+ * Nasce do jeito que imprime: os detalhes de cara na mesa (primeira camada
+ * perfeita), a chapa por cima amarrando tudo, e o botão de apertar no topo. Na
+ * hora de usar é só virar.
+ *
+ * `laçosDetalhe` são os contornos dos detalhes, já no mesmo grid do contorno.
+ */
+export function montarCarimbo(op, contorno, laçosDetalhe) {
+  const e = op.mmPorCelula;
+  const chapa = deslocarLinha(contorno, -(op.folga + 0), e, 1);
+  const zRelevo = op.relevo;
+  const zChapa = zRelevo + op.espessuraChapa;
+
+  const tris = [];
+  const ov = 0.2;                                   // sólidos se sobrepõem, nunca encostam
+  // Cada sólido é fechado por conta própria: assim não depende de eu acertar o
+  // sentido de giro em cada face, e um contorno que veio ao contrário não
+  // inverte a peça inteira.
+  const solto = (montar) => { const t = []; montar(t); anexar(tris, fechar(t)); };
+
+  for (const l of laçosDetalhe) solto((t) => prisma(t, l, e, 0, zRelevo + ov));
+  solto((t) => prisma(t, chapa, e, zRelevo, zChapa));
+
+  if (op.botao > 0) {
+    // centro pela média do contorno: cai dentro da chapa em qualquer formato
+    let sx = 0, sy = 0;
+    const p = chapa.slice(0, -1);
+    for (const q of p) { sx += q[0]; sy += q[1]; }
+    solto((t) => cilindro(t, (sx / p.length) * e, (sy / p.length) * e,
+                          op.botao / 2, zChapa - ov, zChapa + op.alturaBotao));
+  }
+
+  return { tris, altura: zChapa + (op.botao > 0 ? op.alturaBotao : 0),
+           volume: volume(tris) / 1000, detalhes: laçosDetalhe.length };
 }
