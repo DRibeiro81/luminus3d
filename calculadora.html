@@ -98,6 +98,36 @@
   .vazio { border: 1.5px solid var(--linha); background: var(--branco); color: inherit; }
   .acoes { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 
+  /* ---- foto da peça ---- */
+  .solta { border: 2px dashed var(--linha); border-radius: 12px; padding: 20px; text-align: center;
+           color: var(--fraco); font-size: 14px; cursor: pointer; transition: border-color .15s, background .15s; }
+  .solta:hover, .solta.sobre { border-color: var(--ouro); background: #fdfaf3; }
+  .solta b { color: var(--tinta); display: block; margin-bottom: 3px; }
+  .previa { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--linha); }
+  .previa img { display: block; width: 100%; max-height: 220px; object-fit: contain; background: var(--papel); }
+  .previa button { position: absolute; top: 8px; right: 8px; border: 0; border-radius: 8px;
+                   background: rgba(20,22,26,.82); color: #fff; padding: 6px 10px; font-size: 12px;
+                   cursor: pointer; font-family: inherit; font-weight: 600; }
+
+  /* ---- projetos salvos ---- */
+  .salvar { display: flex; gap: 10px; flex-wrap: wrap; }
+  .salvar .caixa { flex: 1; min-width: 180px; }
+  .lista { list-style: none; padding: 0; margin: 16px 0 0; }
+  .lista li { display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px solid var(--linha);
+              border-radius: 12px; margin-bottom: 9px; }
+  .lista .mini { width: 46px; height: 46px; border-radius: 8px; background: var(--papel);
+                 object-fit: cover; flex: 0 0 auto; border: 1px solid var(--linha); }
+  .lista .quem { flex: 1; min-width: 0; }
+  .lista .quem b { display: block; font-size: 14.5px; }
+  .lista .quem span { color: var(--fraco); font-size: 12.5px; }
+  .lista .mini.vazia { display: flex; align-items: center; justify-content: center;
+                       color: var(--fraco); font-size: 18px; }
+  .lista button { border: 1px solid var(--linha); background: var(--branco); border-radius: 8px;
+                  padding: 7px 11px; font-size: 13px; cursor: pointer; font-family: inherit; font-weight: 600; }
+  .lista button:hover { border-color: var(--ouro); color: var(--ouro); }
+  .lista .apagar:hover { border-color: #d9534f; color: #d9534f; }
+  .vazio-lista { color: var(--fraco); font-size: 14px; margin: 14px 0 0; }
+
   footer { background: var(--escuro); color: #98a0ad; font-size: 14px; padding: 34px 0; }
   footer a { color: #98a0ad; }
 </style>
@@ -146,6 +176,19 @@
         <div class="campo"><label for="outros">Outros custos por peça</label>
           <div class="caixa"><span class="pre">R$</span><input id="outros" type="number" min="0" step="0.1" value="0"></div></div>
       </div>
+
+      <div style="margin-top:16px">
+        <label style="font-size:13px;color:var(--fraco);font-weight:600;display:block;margin-bottom:6px">Foto da peça</label>
+        <div class="solta" id="solta">
+          <b>Clique, arraste ou cole uma foto</b>
+          Entra no PDF e na lista de projetos salvos
+        </div>
+        <div class="previa" id="previa" hidden>
+          <img id="imgPeca" alt="Foto da peça">
+          <button type="button" id="btTirarFoto">Trocar</button>
+        </div>
+        <input type="file" id="arquivo" accept="image/*" hidden>
+      </div>
     </div>
 
     <div class="bloco">
@@ -190,7 +233,20 @@
         você não está por perto pra começar a próxima.</p>
     </details>
 
+    <div class="bloco">
+      <h2>Meus projetos</h2>
+      <p class="nota">Salvos só neste navegador, com foto e tudo. Nada é enviado pra servidor.</p>
+      <div class="salvar">
+        <div class="campo caixa"><input id="nomeProjeto" type="text" placeholder="Nome da peça"
+          maxlength="60" autocomplete="off"></div>
+        <button class="bt cheio" id="btSalvar" type="button">Salvar</button>
+      </div>
+      <ul class="lista" id="lista"></ul>
+      <p class="vazio-lista" id="listaVazia">Nenhum projeto salvo ainda.</p>
+    </div>
+
     <div class="acoes">
+      <button class="bt cheio" id="btPdf" type="button">Baixar PDF do cálculo</button>
       <button class="bt vazio" id="btLimpar" type="button">Voltar ao padrão</button>
       <a class="bt vazio" href="index.html#aplicativos">Gerar uma peça nos aplicativos</a>
     </div>
@@ -237,7 +293,10 @@
   <div class="dentro">Luminus 3D · <a href="index.html">voltar ao site</a></div>
 </footer>
 
-<script>
+<script type="module">
+import * as banco from './banco.js';
+import { novoPdf, paraJpeg } from './pdf.js';
+
 const $ = (id) => document.getElementById(id);
 const CAMPOS = ['peso','qtd','horas','pos','embalagem','outros','falha','margem',
                 'rolo','pesoRolo','watts','kwh','preco','vida','hora','ocupacao'];
@@ -330,6 +389,205 @@ function carregar() {
   for (const id of ['peso','horas','qtd']) if (p.has(id)) $(id).value = p.get(id);
 }
 
+/* ---------------- foto da peça ---------------- */
+// Guardada já reduzida e em JPEG: é o formato que o PDF embute direto, e uma
+// foto de celular inteira ocuparia dezenas de megabytes no banco à toa.
+let foto = null;      // { blob, largura, altura }
+
+async function usarArquivo(arq) {
+  if (!arq || !arq.type.startsWith('image/')) return;
+  try {
+    const j = await paraJpeg(arq, 1000, 0.85);
+    foto = { blob: j.blob, largura: j.largura, altura: j.altura };
+    mostrarFoto();
+  } catch (e) {
+    alert('Não consegui ler essa imagem.');
+  }
+}
+function mostrarFoto() {
+  const tem = !!foto;
+  $('solta').hidden = tem;
+  $('previa').hidden = !tem;
+  if (tem) $('imgPeca').src = URL.createObjectURL(foto.blob);
+}
+$('solta').onclick = () => $('arquivo').click();
+$('btTirarFoto').onclick = () => { foto = null; mostrarFoto(); };
+$('arquivo').onchange = (e) => usarArquivo(e.target.files[0]);
+for (const ev of ['dragenter', 'dragover']) {
+  $('solta').addEventListener(ev, (e) => { e.preventDefault(); $('solta').classList.add('sobre'); });
+}
+for (const ev of ['dragleave', 'drop']) {
+  $('solta').addEventListener(ev, (e) => { e.preventDefault(); $('solta').classList.remove('sobre'); });
+}
+$('solta').addEventListener('drop', (e) => usarArquivo(e.dataTransfer.files[0]));
+window.addEventListener('paste', (e) => {
+  const it = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
+  if (it) usarArquivo(it.getAsFile());
+});
+
+/* ---------------- projetos salvos ---------------- */
+let idAberto = null;
+
+function dadosAtuais() {
+  const d = {};
+  for (const id of CAMPOS) d[id] = $(id).value;
+  return d;
+}
+function aplicarDados(d) {
+  for (const id of CAMPOS) if (d[id] !== undefined) $(id).value = d[id];
+  mostrar();
+}
+
+async function pintarLista() {
+  let itens = [];
+  try { itens = await banco.listar(); } catch (e) { itens = []; }
+  $('listaVazia').hidden = itens.length > 0;
+  $('lista').innerHTML = '';
+  for (const it of itens) {
+    const li = document.createElement('li');
+    const mini = document.createElement(it.foto ? 'img' : 'div');
+    mini.className = 'mini' + (it.foto ? '' : ' vazia');
+    if (it.foto) mini.src = URL.createObjectURL(it.foto); else mini.textContent = '—';
+    const quem = document.createElement('div');
+    quem.className = 'quem';
+    const data = new Date(it.atualizadoEm).toLocaleDateString('pt-BR');
+    quem.innerHTML = `<b></b><span>${dinheiro(it.preco || 0)} · ${data}</span>`;
+    quem.querySelector('b').textContent = it.nome || 'Sem nome';
+    const abrir = document.createElement('button');
+    abrir.textContent = 'Abrir';
+    abrir.onclick = () => {
+      aplicarDados(it.dados || {});
+      $('nomeProjeto').value = it.nome || '';
+      foto = it.foto ? { blob: it.foto, largura: it.largura, altura: it.altura } : null;
+      mostrarFoto();
+      idAberto = it.id;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    const apagar = document.createElement('button');
+    apagar.className = 'apagar';
+    apagar.textContent = 'Apagar';
+    apagar.onclick = async () => {
+      if (!confirm(`Apagar "${it.nome || 'sem nome'}"?`)) return;
+      await banco.apagar(it.id);
+      if (idAberto === it.id) idAberto = null;
+      pintarLista();
+    };
+    li.append(mini, quem, abrir, apagar);
+    $('lista').appendChild(li);
+  }
+}
+
+$('btSalvar').onclick = async () => {
+  const nome = $('nomeProjeto').value.trim();
+  if (!nome) { $('nomeProjeto').focus(); return; }
+  const r = calcular();
+  const b = $('btSalvar'); const antes = b.textContent;
+  b.textContent = 'Salvando…'; b.disabled = true;
+  try {
+    // Regravar em cima do mesmo id evita encher a lista de cópias quando a
+    // pessoa ajusta um número e salva de novo com o mesmo nome.
+    const anteriores = await banco.listar();
+    const mesmoNome = anteriores.find((x) => x.nome === nome);
+    const id = idAberto || (mesmoNome ? mesmoNome.id : null);
+    idAberto = await banco.salvar({
+      id: id || undefined, nome, dados: dadosAtuais(),
+      preco: r.preco, custo: r.custo, lucro: r.lucro,
+      foto: foto ? foto.blob : null,
+      largura: foto ? foto.largura : 0, altura: foto ? foto.altura : 0,
+    });
+    await pintarLista();
+    b.textContent = 'Salvo';
+    setTimeout(() => { b.textContent = antes; }, 1200);
+  } catch (e) {
+    alert('Não consegui salvar aqui. Se estiver numa janela anônima, o navegador bloqueia o banco.');
+    b.textContent = antes;
+  } finally { b.disabled = false; }
+};
+
+/* ---------------- PDF ---------------- */
+$('btPdf').onclick = async () => {
+  const r = calcular();
+  const nome = $('nomeProjeto').value.trim() || 'Peça sem nome';
+  const b = $('btPdf'); const antes = b.textContent;
+  b.textContent = 'Montando…'; b.disabled = true;
+  try {
+    const p = novoPdf();
+    const M = 48, L = p.pagina.largura - M;
+    let y = 56;
+
+    p.retangulo(0, 0, p.pagina.largura, 8, { cor: '#d9a441' });
+    p.texto('LUMINUS 3D', M, y, { tamanho: 10, negrito: true, cor: '#b8862b' });
+    y += 26;
+    p.texto(nome, M, y, { tamanho: 22, negrito: true, cor: '#16181d' });
+    y += 16;
+    p.texto('Cálculo de custo e preço · ' + new Date().toLocaleDateString('pt-BR'),
+            M, y, { tamanho: 10, cor: '#626a76' });
+    y += 22;
+    p.linha(M, y, L, y, { cor: '#e3e0da' });
+    y += 26;
+
+    if (foto) {
+      const j = await paraJpeg(foto.blob, 900, 0.85);
+      const larg = 168, alt = Math.min(150, larg * j.altura / j.largura);
+      p.imagem(j.bytes, j.largura, j.altura, L - larg, y - 6, larg, alt);
+    }
+
+    const esq = M;
+    p.texto('A peça', esq, y, { tamanho: 12, negrito: true });
+    y += 18;
+    const dado = (rot, val) => {
+      p.texto(rot, esq, y, { tamanho: 10, cor: '#626a76' });
+      p.texto(val, esq + 120, y, { tamanho: 10, negrito: true });
+      y += 15;
+    };
+    dado('Peso', num('peso').toFixed(1).replace('.', ',') + ' g');
+    dado('Tempo de impressão', num('horas').toFixed(1).replace('.', ',') + ' h');
+    dado('Quantidade', String(Math.max(1, Math.round(num('qtd')))) + ' peça(s)');
+    dado('Taxa de falha', num('falha') + '%');
+    dado('Margem', num('margem') + '%');
+
+    y = Math.max(y, 210) + 18;
+    p.texto('Custo por peça', esq, y, { tamanho: 12, negrito: true });
+    y += 8;
+    p.linha(esq, y, L, y, { cor: '#e3e0da' });
+    y += 18;
+    for (const parte of PARTES) {
+      p.texto(parte.nome, esq, y, { tamanho: 10.5, cor: '#16181d' });
+      p.textoDireita(dinheiro(r[parte.id]), L, y, { tamanho: 10.5 });
+      y += 16;
+    }
+    p.linha(esq, y - 4, L, y - 4, { cor: '#16181d', espessura: 1.1 });
+    y += 12;
+    p.texto('Custo total por peça', esq, y, { tamanho: 11.5, negrito: true });
+    p.textoDireita(dinheiro(r.custo), L, y, { tamanho: 11.5, negrito: true });
+    y += 28;
+
+    p.retangulo(esq, y - 14, L - esq, 74, { cor: '#14161a' });
+    p.texto('Preço de venda sugerido', esq + 18, y + 4, { tamanho: 10, cor: '#9aa2ae' });
+    p.texto(dinheiro(r.preco), esq + 18, y + 30, { tamanho: 26, negrito: true, cor: '#d9a441' });
+    p.texto('Lucro por peça', esq + 250, y + 4, { tamanho: 10, cor: '#9aa2ae' });
+    p.texto(dinheiro(r.lucro), esq + 250, y + 26, { tamanho: 15, negrito: true, cor: '#ffffff' });
+    p.texto('Lote de ' + Math.max(1, Math.round(num('qtd'))), esq + 380, y + 4, { tamanho: 10, cor: '#9aa2ae' });
+    p.texto(dinheiro(r.preco * r.q), esq + 380, y + 26, { tamanho: 15, negrito: true, cor: '#ffffff' });
+    y += 92;
+
+    p.texto('Vale a pena imprimir?', esq, y, { tamanho: 12, negrito: true });
+    y += 18;
+    dado('Lucro por hora de máquina', dinheiro(r.porHora));
+    dado('Descontando a ocupação real', dinheiro(r.porHoraReal));
+    dado('Peças pra pagar a impressora',
+         isFinite(r.pecasPagar) ? r.pecasPagar + ' peças' : '—');
+
+    y = p.pagina.altura - 54;
+    p.linha(M, y - 14, L, y - 14, { cor: '#e3e0da' });
+    p.texto('Gerado em luminus3d · dribeiro81.github.io/luminus3d', M, y,
+            { tamanho: 9, cor: '#98a0ad' });
+
+    const limpo = nome.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'calculo';
+    p.baixar(limpo + '-luminus3d.pdf');
+  } finally { b.textContent = antes; b.disabled = false; }
+};
+
 CAMPOS.forEach((id) => $(id).addEventListener('input', () => { salvar(); mostrar(); }));
 $('btLimpar').onclick = () => {
   try { localStorage.removeItem(CHAVE); } catch (e) {}
@@ -337,7 +595,10 @@ $('btLimpar').onclick = () => {
 };
 carregar();
 mostrar();
-window.__calc = { calcular, mostrar };
+mostrarFoto();
+pintarLista();
+window.__calc = { calcular, mostrar, pintarLista, banco,
+                  usarArquivo: (a) => usarArquivo(a), temFoto: () => !!foto };
 </script>
 </body>
 </html>
