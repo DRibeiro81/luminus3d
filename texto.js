@@ -114,7 +114,7 @@ export function pedacos(mascara) {
 }
 
 /** Come uma casca de material em volta de tudo. */
-function encolher(m) {
+export function encolher(m) {
   const L = m.length, C = m[0].length;
   const saida = [];
   for (let j = 0; j < L; j++) {

@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cortador de Biscoito — Luminus 3D</title>
+<style>
+  :root {
+    --bg: #14161a; --painel: #1c1f25; --linha: #2b3038;
+    --texto: #e7eaef; --fraco: #8b93a1; --destaque: #d9a441;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--texto); display: flex;
+    height: 100vh; overflow: hidden;
+  }
+  aside { width: 300px; flex: 0 0 300px; background: var(--painel);
+          border-right: 1px solid var(--linha); display: flex; flex-direction: column; }
+  aside > header { padding: 16px 18px 12px; border-bottom: 1px solid var(--linha); }
+  aside > .corpo { flex: 1; overflow-y: auto; padding: 0 18px 16px; }
+  aside > footer { padding: 12px 18px 14px; border-top: 1px solid var(--linha); }
+  h1 { font-size: 17px; margin: 0 0 2px; }
+  .sub { color: var(--fraco); font-size: 12px; }
+  .sub a { color: var(--destaque); }
+
+  .etapa, details { border-top: 1px solid var(--linha); margin-top: 12px; padding-top: 11px; }
+  .corpo > .etapa:first-child { border-top: 0; margin-top: 0; padding-top: 14px; }
+  .tit, summary { color: var(--fraco); font-size: 11px; font-weight: 600;
+                  text-transform: uppercase; letter-spacing: .08em; margin: 0 0 11px; }
+  .tit b { color: var(--destaque); margin-right: 7px; }
+  summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: '+'; font-size: 14px; opacity: .7; }
+  details[open] summary::after { content: '\2212'; }
+  details:not([open]) summary { margin-bottom: 0; }
+
+  label { display: block; margin-bottom: 9px; }
+  .rot { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .rot span:last-child { color: var(--destaque); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--destaque); }
+  input[type=number] { width: 100%; padding: 6px 8px; background: #12141a; color: var(--texto);
+                       border: 1px solid var(--linha); border-radius: 6px; font-size: 13px; }
+  .caixa { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+  .caixa input { accent-color: var(--destaque); }
+  .dica { margin: 6px 0 0; font-size: 11px; color: var(--fraco); line-height: 1.45; }
+  button { width: 100%; padding: 10px; border: 0; border-radius: 8px; font-size: 14px;
+           font-weight: 600; cursor: pointer; margin-top: 8px;
+           background: var(--destaque); color: #1a1206; font-family: inherit; }
+  button.vazio { background: transparent; border: 1px solid var(--linha); color: var(--texto); font-weight: 500; }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+
+  main { flex: 1; display: flex; flex-direction: column; padding: 18px; gap: 14px; min-width: 0; }
+  #palco { flex: 1; display: flex; flex-direction: column; gap: 14px; align-items: center;
+           justify-content: center; border-radius: 14px; background: #0f1114;
+           position: relative; padding: 16px; min-height: 0; }
+  .abas { display: flex; gap: 6px; }
+  .abas button { width: auto; padding: 5px 14px; margin: 0; font-size: 12px; background: transparent;
+                 border: 1px solid var(--linha); color: var(--fraco); }
+  .abas button.ativa { background: var(--destaque); color: #1a1206; border-color: var(--destaque); }
+  #cena { position: relative; flex: 1; width: 100%; min-height: 220px; }
+  #visor { width: 100%; height: 100%; border-radius: 10px; cursor: grab; }
+  #visor:active { cursor: grabbing; }
+  #tela { max-width: 100%; max-height: 100%; border-radius: 8px; }
+  #girar { position: absolute; left: 12px; bottom: 10px; font-size: 11px; color: var(--fraco);
+           pointer-events: none; }
+
+  #solta { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 12px;
+           align-items: center; justify-content: center; text-align: center; background: #0f1114;
+           border: 2px dashed var(--linha); border-radius: 14px; color: var(--fraco); padding: 24px; }
+  #solta.sobre { border-color: var(--destaque); }
+  #solta b { color: var(--texto); font-size: 16px; }
+  #solta kbd { background: #262b33; border: 1px solid var(--linha); border-radius: 4px;
+               padding: 1px 6px; font-size: 12px; }
+
+  #dados { display: flex; gap: 22px; flex-wrap: wrap; border-top: 1px solid var(--linha);
+           padding-top: 12px; font-size: 12px; color: var(--fraco); }
+  #dados b { display: block; color: var(--texto); font-size: 15px; font-weight: 600;
+             font-variant-numeric: tabular-nums; }
+  #aviso { color: var(--destaque); font-size: 12px; min-height: 18px; }
+</style>
+</head>
+<body>
+
+<aside>
+  <header>
+    <h1>Cortador de Biscoito</h1>
+    <div class="sub">A foto vira o contorno da lâmina.
+      <a href="index.html">Início</a> · <a href="app.html">Retrato em Linhas</a> ·
+      <a href="luz.html">Foto Mágica</a> · <a href="vaso.html">Vaso e Abajur</a> ·
+      <a href="texto.html">Lápis com Nome</a></div>
+  </header>
+
+  <div class="corpo">
+    <div class="etapa">
+      <p class="tit"><b>1</b>Figura</p>
+      <button class="vazio" id="btEscolher">Escolher imagem…</button>
+      <input type="file" id="arquivo" accept="image/*" hidden>
+      <label style="margin-top:12px">
+        <div class="rot"><span>Onde separa figura do fundo</span><span id="rLimiar">50%</span></div>
+        <input type="range" id="limiar" min="5" max="95" step="1" value="50"></label>
+      <div class="caixa"><input type="checkbox" id="inverter"><span>Inverter (figura clara)</span></div>
+      <div class="caixa"><input type="checkbox" id="furos" checked><span>Fechar os furos de dentro</span></div>
+      <p class="dica">Funciona melhor com desenho de silhueta cheia, fundo limpo e bom contraste.</p>
+    </div>
+
+    <div class="etapa">
+      <p class="tit"><b>2</b>Tamanho</p>
+      <label><div class="rot"><span>Maior lado</span><span id="rLado">80 mm</span></div>
+        <input type="range" id="lado" min="30" max="180" step="5" value="80"></label>
+      <label><div class="rot"><span>Altura da lâmina</span><span id="rAltura">15 mm</span></div>
+        <input type="range" id="altura" min="8" max="30" step="1" value="15"></label>
+    </div>
+
+    <div class="etapa">
+      <p class="tit"><b>3</b>Lâmina e aba</p>
+      <label><div class="rot"><span>Espessura da lâmina</span><span id="rLamina">1,0 mm</span></div>
+        <input type="range" id="lamina" min="0.6" max="2.4" step="0.1" value="1"></label>
+      <label><div class="rot"><span>Largura da aba</span><span id="rAba">5 mm</span></div>
+        <input type="range" id="aba" min="0" max="12" step="0.5" value="5"></label>
+      <label><div class="rot"><span>Altura da aba</span><span id="rAlturaAba">2,5 mm</span></div>
+        <input type="range" id="alturaAba" min="1" max="6" step="0.5" value="2.5"></label>
+      <label><div class="rot"><span>Fio de corte afinado</span><span id="rFio">2,0 mm</span></div>
+        <input type="range" id="fio" min="0" max="5" step="0.5" value="2"></label>
+      <div class="caixa"><input type="checkbox" id="abaCheia"><span>Aba cheia (vira carimbo)</span></div>
+      <p class="dica" id="dicaAba">A aba é o que você aperta com a mão. Cheia, ela também amarra
+        as lâminas de dentro quando a figura tem furo.</p>
+    </div>
+
+    <details>
+      <summary>Ajustes de impressão</summary>
+      <label><div class="rot"><span>Bico</span><span id="rBico">0,4 mm</span></div>
+        <input type="range" id="bico" min="0.2" max="0.8" step="0.05" value="0.4"></label>
+      <label><div class="rot"><span>Finura da malha</span><span id="rFinura">0,4 mm</span></div>
+        <input type="range" id="finura" min="0.2" max="0.8" step="0.05" value="0.4"></label>
+      <p class="dica">Finura menor deixa a borda mais lisa e o arquivo maior.</p>
+    </details>
+  </div>
+
+  <footer>
+    <button id="btBaixar" disabled>Baixar STL</button>
+    <p class="dica">Imprima <b>em pé, com a aba na mesa</b>. Sem suporte, sem preenchimento —
+      a lâmina é parede sozinha.</p>
+  </footer>
+</aside>
+
+<main>
+  <div id="palco">
+    <div class="abas">
+      <button data-ver="3d" class="ativa">Peça em 3D</button>
+      <button data-ver="plano">Contorno</button>
+    </div>
+    <div id="cena"><canvas id="visor"></canvas>
+      <div id="girar">Arraste pra girar, role pra aproximar.</div></div>
+    <canvas id="tela" hidden></canvas>
+    <div id="solta">
+      <b>Cole a figura aqui</b>
+      <div><kbd>⌘</kbd> + <kbd>V</kbd>, arraste o arquivo ou clique em "Escolher imagem"</div>
+    </div>
+  </div>
+
+  <div id="dados">
+    <div>Peça<b id="dTam">—</b></div>
+    <div>Parede mais fina<b id="dParede">—</b></div>
+    <div>Pedaços<b id="dPedacos">—</b></div>
+    <div>Filamento<b id="dPeso">—</b></div>
+    <div>Arquivo<b id="dArq">—</b></div>
+    <div style="margin-left:auto"><a id="elCalc" href="calculadora.html"
+      style="color:var(--destaque);text-decoration:none;font-weight:600;font-size:12px">Calcular preço &rsaquo;</a></div>
+  </div>
+  <div id="aviso"></div>
+</main>
+
+<script type="module">
+import { montarCortador, maiorPedaco, preencherFuros } from './cortador.js';
+import { escreverStl } from './geometria.js';
+import { criarVisor } from './visor3d.js';
+
+const DENSIDADE = 1.24;
+const $ = (id) => document.getElementById(id);
+let imagem = null, nomeBase = 'cortador', ultimo = null, pendente = 0;
+let visor = null, vendo = '3d';
+
+/* ---------------- imagem vira silhueta ---------------- */
+function silhueta() {
+  if (!imagem) return null;
+  const e = +$('finura').value;
+  const lado = +$('lado').value;
+  // A grade acompanha o maior lado da peça: nem mais fina que a malha pedida,
+  // nem tão grossa que o desenho vire escada.
+  const n = Math.max(40, Math.min(700, Math.round(lado / e)));
+  const escala = n / Math.max(imagem.width, imagem.height);
+  const C = Math.max(8, Math.round(imagem.width * escala));
+  const L = Math.max(8, Math.round(imagem.height * escala));
+  const cv = document.createElement('canvas');
+  cv.width = C; cv.height = L;
+  const c = cv.getContext('2d', { willReadFrequently: true });
+  c.fillStyle = '#fff'; c.fillRect(0, 0, C, L);
+  c.drawImage(imagem, 0, 0, C, L);
+  const d = c.getImageData(0, 0, C, L).data;
+
+  const corte = +$('limiar').value / 100;
+  const inv = $('inverter').checked;
+  const m = [];
+  for (let j = 0; j < L; j++) {
+    const linha = new Uint8Array(C);
+    for (let i = 0; i < C; i++) {
+      const k = (j * C + i) * 4;
+      const luz = (0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2]) / 255;
+      const dentro = inv ? luz > corte : luz < corte;
+      linha[i] = dentro ? 1 : 0;
+    }
+    m.push(linha);
+  }
+  // margem de uma célula em volta: a figura não pode encostar na borda, senão a
+  // inundação que acha o fundo entra por dentro dela
+  const mm = [new Uint8Array(C + 2)];
+  for (const l of m) { const n2 = new Uint8Array(C + 2); n2.set(l, 1); mm.push(n2); }
+  mm.push(new Uint8Array(C + 2));
+
+  const so = maiorPedaco(mm);
+  return { mascara: $('furos').checked ? preencherFuros(so.mascara) : so.mascara,
+           sobraram: so.sobraram, mmPorCelula: lado / n };
+}
+
+function calcular() {
+  const s = silhueta();
+  if (!s) return null;
+  let tinta = 0;
+  for (const l of s.mascara) for (const v of l) if (v) tinta++;
+  if (tinta < 60) return { vazio: true };
+  const op = {
+    mmPorCelula: s.mmPorCelula,
+    larguraAba: +$('aba').value,
+    alturaAba: +$('alturaAba').value,
+    espessuraLamina: +$('lamina').value,
+    altura: +$('altura').value,
+    fio: +$('fio').value,
+    abaCheia: $('abaCheia').checked,
+  };
+  const r = montarCortador(op, s.mascara);
+  return { ...r, op, silhueta: s };
+}
+
+/* ---------------- prévia plana ---------------- */
+function desenhar(r) {
+  const m = r.silhueta.mascara, L = m.length, C = m[0].length;
+  const escala = Math.min(760 / C, 420 / L, 6);
+  const cv = $('tela');
+  cv.width = Math.round(C * escala); cv.height = Math.round(L * escala);
+  const c = cv.getContext('2d');
+  c.fillStyle = '#0f1114'; c.fillRect(0, 0, cv.width, cv.height);
+  const img = c.getImageData(0, 0, cv.width, cv.height);
+  for (let y = 0; y < cv.height; y++) {
+    const sy = Math.min(L - 1, Math.floor(y / escala));
+    for (let x = 0; x < cv.width; x++) {
+      if (!m[sy][Math.min(C - 1, Math.floor(x / escala))]) continue;
+      const i = (y * cv.width + x) * 4;
+      img.data[i] = 58; img.data[i + 1] = 63; img.data[i + 2] = 73; img.data[i + 3] = 255;
+    }
+  }
+  c.putImageData(img, 0, 0);
+  // a lâmina por cima, que é o que vira peça
+  c.strokeStyle = '#d9a441';
+  c.lineWidth = Math.max(1.5, (r.op.espessuraLamina / r.op.mmPorCelula) * escala);
+  c.beginPath();
+  for (let j = 1; j < L; j++) for (let i = 1; i < C; i++) {
+    if (m[j][i] === m[j][i - 1] && m[j][i] === m[j - 1][i]) continue;
+    c.rect(i * escala - 0.5, j * escala - 0.5, 1, 1);
+  }
+  c.stroke();
+}
+
+function aplicar(r) {
+  ultimo = r && !r.vazio ? r : null;
+  const temPeca = !!ultimo;
+  $('solta').hidden = !!imagem;
+  $('btBaixar').disabled = !temPeca;
+  if (!temPeca) {
+    $('aviso').textContent = imagem ? 'Não achei figura nenhuma. Mexa no ponto de corte ou inverta.' : '';
+    return;
+  }
+  const em3d = vendo === '3d' && visor && visor.ok;
+  $('cena').hidden = !em3d;
+  $('tela').hidden = em3d;
+  if (em3d) { visor.enviar(r.tris); visor.desenhar(); } else desenhar(r);
+  mostrar(r);
+}
+
+function mostrar(r) {
+  const n = (v, d = 1) => v.toFixed(d).replace('.', ',');
+  $('dTam').textContent = `${Math.round(r.largura)} × ${Math.round(r.profundidade)} × ${Math.round(r.altura)} mm`;
+  $('dParede').textContent = `${n(r.paredeFina, 2)} mm`;
+  $('dPedacos').textContent = r.pedacos === 1 ? 'peça inteira' : `${r.pedacos} soltos`;
+  const g = r.volume * DENSIDADE;
+  $('dPeso').textContent = `~${n(g)} g`;
+  $('dArq').textContent = `${(r.tris.length * 50 / 1e6).toFixed(1)} MB`;
+  $('elCalc').href = `calculadora.html?peso=${g.toFixed(1)}`;
+
+  const av = [];
+  if (r.pedacos > 1) av.push(`A peça sai em ${r.pedacos} pedaços soltos: a figura tem furo e as lâminas de dentro não estão presas. Ligue "aba cheia" ou "fechar os furos".`);
+  if (r.paredeFina < +$('bico').value * 2) av.push(`Parede de ${n(r.paredeFina, 2)} mm é fina demais pra cortar massa. Engrosse a lâmina.`);
+  if (r.silhueta.sobraram > 0) av.push(`Descartei ${r.silhueta.sobraram} mancha(s) solta(s) do fundo.`);
+  if (Math.max(r.largura, r.profundidade) > 210) av.push('Maior que a mesa da Kobra X (220 mm).');
+  $('aviso').textContent = av.join(' ');
+}
+
+function agendar() { clearTimeout(pendente); pendente = setTimeout(() => aplicar(calcular()), 110); }
+
+/* ---------------- carregar figura ---------------- */
+function carregarArquivo(arq) {
+  if (!arq || !arq.type.startsWith('image/')) return;
+  nomeBase = (arq.name || 'cortador').replace(/\.[^.]+$/, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cortador';
+  const url = URL.createObjectURL(arq);
+  const im = new Image();
+  im.onload = () => { imagem = im; URL.revokeObjectURL(url); agendar(); };
+  im.src = url;
+}
+$('btEscolher').onclick = () => $('arquivo').click();
+$('arquivo').onchange = (e) => carregarArquivo(e.target.files[0]);
+for (const ev of ['dragenter', 'dragover']) document.addEventListener(ev, (e) => {
+  e.preventDefault(); $('solta').classList.add('sobre'); });
+for (const ev of ['dragleave', 'drop']) document.addEventListener(ev, (e) => {
+  e.preventDefault(); $('solta').classList.remove('sobre'); });
+document.addEventListener('drop', (e) => carregarArquivo(e.dataTransfer.files[0]));
+window.addEventListener('paste', (e) => {
+  const it = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
+  if (it) carregarArquivo(it.getAsFile());
+});
+
+/* ---------------- baixar ---------------- */
+$('btBaixar').onclick = async () => {
+  if (!ultimo) return;
+  const sug = `${nomeBase}-cortador-${Math.round(ultimo.largura)}mm.stl`;
+  let destino = null;
+  if (window.showSaveFilePicker) {
+    try {
+      destino = await window.showSaveFilePicker({ suggestedName: sug,
+        types: [{ description: 'STL', accept: { 'model/stl': ['.stl'] } }] });
+    } catch (e) { if (e.name === 'AbortError') return; destino = null; }
+  }
+  let nome = sug;
+  if (!destino) {
+    const resp = prompt('Nome do arquivo:', sug);
+    if (resp === null) return;
+    nome = resp.trim() || sug;
+    if (!nome.toLowerCase().endsWith('.stl')) nome += '.stl';
+  }
+  const b = $('btBaixar'), antes = b.textContent;
+  b.textContent = 'Montando…'; b.disabled = true;
+  try {
+    const dados = escreverStl(ultimo.tris, 'luminus 3d');
+    if (destino) {
+      const f = await destino.createWritable();
+      await f.write(new Blob([dados], { type: 'model/stl' })); await f.close();
+    } else {
+      const url = URL.createObjectURL(new Blob([dados], { type: 'model/stl' }));
+      const a = document.createElement('a'); a.href = url; a.download = nome; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    }
+  } finally { b.textContent = antes; b.disabled = false; }
+};
+
+/* ---------------- controles ---------------- */
+const vg = (v, d = 1) => v.toFixed(d).replace('.', ',');
+function rotulos() {
+  $('rLimiar').textContent = `${$('limiar').value}%`;
+  $('rLado').textContent = `${$('lado').value} mm`;
+  $('rAltura').textContent = `${$('altura').value} mm`;
+  $('rLamina').textContent = `${vg(+$('lamina').value)} mm`;
+  $('rAba').textContent = `${vg(+$('aba').value, 1)} mm`;
+  $('rAlturaAba').textContent = `${vg(+$('alturaAba').value)} mm`;
+  $('rFio').textContent = `${vg(+$('fio').value)} mm`;
+  $('rBico').textContent = `${vg(+$('bico').value, 2)} mm`;
+  $('rFinura').textContent = `${vg(+$('finura').value, 2)} mm`;
+}
+document.querySelectorAll('aside input').forEach((el) =>
+  el.addEventListener('input', () => { rotulos(); agendar(); }));
+document.querySelectorAll('.abas button').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('.abas button').forEach((o) => o.classList.remove('ativa'));
+  b.classList.add('ativa'); vendo = b.dataset.ver; aplicar(ultimo);
+});
+
+visor = criarVisor($('visor'), { giroInicial: 0, inclinaInicial: -1.05,
+                                 distInicial: 1, enquadrar: true, fov: 0.5 });
+if (!visor.ok) { vendo = 'plano'; document.querySelector('.abas').hidden = true; }
+rotulos();
+window.__cortador = { calcular, aplicar, carregarArquivo, silhueta,
+                      visor: () => visor, ver: () => vendo };
+</script>
+</body>
+</html>
