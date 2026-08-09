@@ -78,9 +78,13 @@
   .placar span { color: #aab1bd; font-size: 14.5px; }
 
   /* ---- cartões dos aplicativos ---- */
-  .quatro { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 40px; }
-  @media (max-width: 1000px) { .quatro { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 560px) { .quatro { grid-template-columns: 1fr; } }
+  /* Cinco colunas, porque são cinco aplicativos. Com a grade fixa em quatro que
+     havia aqui, o quinto cartão ficava sozinho numa linha inteira. */
+  .apps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-top: 40px; }
+  @media (max-width: 1080px) { .apps { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 760px) { .apps { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 520px) { .apps { grid-template-columns: 1fr; } }
+  @media (min-width: 1081px) { .app .foto { height: 140px; padding: 10px; } }
   .app { background: var(--branco); border: 1px solid var(--linha); border-radius: 16px;
          overflow: hidden; display: flex; flex-direction: column; transition: box-shadow .18s, transform .18s; }
   .app:hover { box-shadow: 0 12px 34px rgba(20, 22, 26, .09); transform: translateY(-3px); }
@@ -175,10 +179,10 @@
   <div class="dentro">
     <span class="selo">Aplicativos</span>
     <h2>Escolha o que você quer criar.</h2>
-    <p class="conduz">Cada um faz uma coisa e faz bem. Abre, carrega a foto ou escreve o nome,
-      ajusta o tamanho e baixa o STL.</p>
+    <p class="conduz">Cada um faz uma coisa e faz bem. Abre, manda a foto ou o desenho — ou só
+      escreve o nome —, ajusta o tamanho e baixa o STL.</p>
 
-    <div class="quatro">
+    <div class="apps">
       <div class="app">
         <div class="foto"><img src="img/retrato-em-linhas.png" alt="Quadro de linhas"></div>
         <div class="txt">
@@ -215,7 +219,8 @@
         <div class="foto"><img src="img/cortador.jpg" alt="Cortadores de dinossauro apertados na massa, com o desenho marcado na massa cortada"></div>
         <div class="txt">
           <h3>Cortador de Biscoito</h3>
-          <p>Manda o desenho e sai a lâmina no contorno dele, com aba pra apertar.</p>
+          <p>Manda o desenho e sai o conjunto: a lâmina no contorno dele e o carimbo que
+            marca os detalhes na massa cortada.</p>
           <a class="bt cheio" href="cortador.html">Criar</a>
         </div>
       </div>
@@ -269,13 +274,13 @@
     <div class="tres">
       <div>
         <h3>1 · Escolha e carregue</h3>
-        <p>Abra o aplicativo, mande a foto ou escreva o nome. Nada é enviado pra servidor —
-          o cálculo acontece na sua máquina.</p>
+        <p>Abra o aplicativo, mande a foto ou o desenho, ou escreva o nome. Nada é enviado
+          pra servidor — o cálculo acontece na sua máquina.</p>
       </div>
       <div>
         <h3>2 · Ajuste na tela</h3>
         <p>Tamanho em milímetros, espessura, cor. A prévia muda na hora e o rodapé mostra
-          peso, tempo e o traço mais fino da peça.</p>
+          a medida da peça e quanto vai de filamento.</p>
       </div>
       <div>
         <h3>3 · Baixe e imprima</h3>
@@ -297,7 +302,8 @@
           <li>Custo aberto item por item, não só o total</li>
           <li>Falha diluída nas peças que deram certo</li>
           <li>Quantas peças pra pagar a impressora</li>
-          <li>Suas configurações ficam salvas no navegador</li>
+          <li>Projeto salvo com nome e foto da peça, no seu navegador</li>
+          <li>Orçamento em PDF pra mandar pro cliente</li>
         </ul>
         <div class="botoes"><a class="bt dourado" href="calculadora.html">Abrir a calculadora</a></div>
       </div>
@@ -314,7 +320,7 @@
 <section class="chamada" id="contato">
   <div class="dentro">
     <h2>Comece pelo que é de graça.</h2>
-    <p class="conduz" style="max-width: 620px; margin: 0 auto;">Os quatro aplicativos estão no ar
+    <p class="conduz" style="max-width: 620px; margin: 0 auto;">Os cinco aplicativos estão no ar
       e não pedem cadastro. Se o que você precisa não está lá, escreva pra gente.</p>
     <div class="botoes" style="justify-content: center;">
       <a class="bt dourado" href="#aplicativos">Ver os aplicativos</a>
