@@ -492,9 +492,12 @@ function calcular() {
 
   // Carimbo ao lado, no mesmo arquivo. Só sai se houver imagem de detalhe:
   // chapa lisa não carimba nada e só gastaria filamento.
-  let carimbo = null, tris = r.tris, laçosDet = [];
+  let carimbo = null, tris = r.tris, laçosDet = [], denso = 0;
   if ($('temCarimbo').checked) {
-    const recuo = op.espessuraLamina / 2 + +$('folga').value + 0.8;
+    // A chapa do carimbo já entra espessuraLamina/2 + folga pra dentro; o traço
+    // só precisa não nascer na quina dela. Uma passada de bico basta — os 0,8 mm
+    // que eu punha aqui comiam desenho perto da borda em figura de braço fino.
+    const recuo = op.espessuraLamina / 2 + +$('folga').value + 0.4;
     const det = mascaraDetalhes(s, recuo, op.mmPorCelula);
     if (det) {
       const { F, mmFina } = det;
@@ -514,15 +517,27 @@ function calcular() {
         for (let j = 0; j < md.length; j++)
           for (let i = 0; i < md[0].length; i++) if (det.cheias[j][i]) md[j][i] = 1;
       } else md = md || det.cheias;
-      // Agora o borrão vale a pena: nesta grade a caneta ocupa umas oito
-      // células, então raio 2 come a escada e não a linha. As coordenadas
-      // voltam divididas por F, que é a grade da lâmina.
-      // sem preencherFuros: aqui a máscara é TRAÇO, e traço fecha laço o tempo
-      // todo — tapar o miolo de cada laço transformava o rosto num disco
-      laçosDet = contornos(borrar(md, 2))
+      // Borrão de raio 1 e ponto. Nesta grade isso já é bem menos que a largura
+      // da caneta, e alisa. Em raio 2 o vale entre duas linhas vizinhas subia
+      // acima do meio e elas FUNDIAM — era daí o borrão do Mickey, onde o
+      // desenho é denso. As coordenadas voltam divididas por F, que é a grade da
+      // lâmina.
+      //
+      // E sem preencherFuros: aqui a máscara é TRAÇO, e traço fecha laço o tempo
+      // todo — tapar o miolo de cada laço transformava o rosto num disco.
+      laçosDet = contornos(borrar(md, 1))
         .map((l) => decimar(suavizarLinha(l.map(([x, y]) => [x / F, y / F]), 3), 0.5))
         // laço curto não é ruído: bolinha de 1 mm fecha em meia dúzia de pontos
         .filter((l) => l.length >= 6);
+      // Quanto da figura o traço já ocupa. Passando de um terço, as linhas se
+      // encostaram e o carimbo sai como mancha: não é ajuste que resolve, o
+      // desenho tem mais detalhe do que cabe nesse tamanho.
+      let tinta = 0, area = 0;
+      for (let j = 0; j < md.length; j++) for (let i = 0; i < md[0].length; i++) {
+        if (md[j][i]) tinta++;
+        area++;
+      }
+      denso = area ? tinta / area : 0;
     }
     if (laçosDet.length) {
       carimbo = montarCarimbo({
@@ -543,7 +558,7 @@ function calcular() {
   // Medir de novo na grade dava 0,40 mm com a lâmina em 1,0 e acendia um aviso
   // falso, porque o anel de duas células some na primeira erosão.
   const L = s.mascara.length, C = s.mascara[0].length;
-  return { ...r, tris, op, silhueta: s, carimbo, contorno: laços, tracos: laçosDet,
+  return { ...r, tris, op, silhueta: s, carimbo, contorno: laços, tracos: laçosDet, denso,
            volume: r.volume + (carimbo ? carimbo.volume : 0),
            largura: C * op.mmPorCelula, profundidade: L * op.mmPorCelula, altura: op.altura,
            pedacos: laços.length,
@@ -633,6 +648,7 @@ function mostrar(r) {
   const av = [];
   if (r.pedacos > 1) av.push(`A peça sai em ${r.pedacos} pedaços soltos: a figura tem furo e a lâmina de dentro não fica presa em nada. Ligue "fechar os furos de dentro".`);
   if ($('temCarimbo').checked && !r.carimbo) av.push('Não achei traço nenhum dentro da figura. Suba o "quantas cores" ou baixe o "quanto detalhe".');
+  if (r.denso > 0.3) av.push(`O traço já cobre ${Math.round(r.denso * 100)}% do desenho: as linhas se encostaram e vão sair como mancha. Aumente o "maior lado", afine a caneta ou suba o "quanto detalhe".`);
   if (r.paredeFina < +$('bico').value * 2) av.push(`Parede de ${n(r.paredeFina, 2)} mm é fina demais pra cortar massa. Engrosse a lâmina.`);
   if (r.silhueta.sobraram > 0) av.push(`Descartei ${r.silhueta.sobraram} mancha(s) solta(s) do fundo.`);
   if (Math.max(r.largura, r.profundidade) > 210) av.push('Maior que a mesa da Kobra X (220 mm).');

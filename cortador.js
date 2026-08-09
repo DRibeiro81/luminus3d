@@ -102,33 +102,23 @@ export function suavizar(m, n) {
  * Aqui some qualquer pedaço que toque a faixa da borda.
  */
 export function semBorda(det, silhueta, recuoCel) {
+  // Corta o que cai DENTRO da faixa colada na lâmina, e só isso.
+  //
+  // Antes eu jogava fora o componente inteiro que encostasse na faixa. Serve
+  // quando o contorno do desenho é um laço solto, mas num boneco de corpo preto
+  // o traço interno é a MESMA peça conectada do contorno externo — e ia metade
+  // do desenho junto. No Mickey sobrava 2,6% de tinta, tudo picotado.
   const L = det.length, C = det[0].length;
   let miolo = silhueta;
   for (let k = 0; k < recuoCel; k++) miolo = encolher(miolo);
-  const naBorda = (j, i) => silhueta[j][i] && !miolo[j][i];
-
-  const visto = new Uint8Array(L * C);
-  const saida = Array.from({ length: L }, () => new Uint8Array(C));
-  const pilha = [];
-  for (let j0 = 0; j0 < L; j0++) for (let i0 = 0; i0 < C; i0++) {
-    if (!det[j0][i0] || visto[j0 * C + i0]) continue;
-    const grupo = [];
-    let toca = false;
-    visto[j0 * C + i0] = 1; pilha.length = 0; pilha.push(j0 * C + i0);
-    while (pilha.length) {
-      const k = pilha.pop(), y = (k / C) | 0, x = k % C;
-      grupo.push(k);
-      if (naBorda(y, x)) toca = true;
-      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
-        const nx = x + dx, ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= C || ny >= L) continue;
-        const kk = ny * C + nx;
-        if (det[ny][nx] && !visto[kk]) { visto[kk] = 1; pilha.push(kk); }
-      }
-    }
-    if (!toca) for (const k of grupo) saida[(k / C) | 0][k % C] = 1;
+  const saida = [];
+  let algum = false;
+  for (let j = 0; j < L; j++) {
+    const linha = new Uint8Array(C);
+    for (let i = 0; i < C; i++) if (det[j][i] && miolo[j][i]) { linha[i] = 1; algum = true; }
+    saida.push(linha);
   }
-  return saida;
+  return algum ? saida : null;
 }
 
 /**
