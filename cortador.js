@@ -94,6 +94,44 @@ export function suavizar(m, n) {
 }
 
 /**
+ * Joga fora os traços que encostam na borda da figura.
+ *
+ * O contorno do desenho também é um traço escuro, e ele já virou a lâmina do
+ * cortador. Se sobrar na máscara de detalhe, vira um relevo que dá a volta na
+ * peça inteira. Encolher a silhueta não basta: traço grosso atravessa a erosão.
+ * Aqui some qualquer pedaço que toque a faixa da borda.
+ */
+export function semBorda(det, silhueta, recuoCel) {
+  const L = det.length, C = det[0].length;
+  let miolo = silhueta;
+  for (let k = 0; k < recuoCel; k++) miolo = encolher(miolo);
+  const naBorda = (j, i) => silhueta[j][i] && !miolo[j][i];
+
+  const visto = new Uint8Array(L * C);
+  const saida = Array.from({ length: L }, () => new Uint8Array(C));
+  const pilha = [];
+  for (let j0 = 0; j0 < L; j0++) for (let i0 = 0; i0 < C; i0++) {
+    if (!det[j0][i0] || visto[j0 * C + i0]) continue;
+    const grupo = [];
+    let toca = false;
+    visto[j0 * C + i0] = 1; pilha.length = 0; pilha.push(j0 * C + i0);
+    while (pilha.length) {
+      const k = pilha.pop(), y = (k / C) | 0, x = k % C;
+      grupo.push(k);
+      if (naBorda(y, x)) toca = true;
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= C || ny >= L) continue;
+        const kk = ny * C + nx;
+        if (det[ny][nx] && !visto[kk]) { visto[kk] = 1; pilha.push(kk); }
+      }
+    }
+    if (!toca) for (const k of grupo) saida[(k / C) | 0][k % C] = 1;
+  }
+  return saida;
+}
+
+/**
  * Anel em volta da borda da figura: engorda `fora` células pra cá e encolhe
  * `dentro` células pra lá; o que sobra entre os dois é a parede.
  */
@@ -599,7 +637,10 @@ function cilindro(tris, cx, cy, raio, z0, z1, lados = 48) {
  */
 export function montarCarimbo(op, contorno, laçosDetalhe) {
   const e = op.mmPorCelula;
-  const chapa = deslocarLinha(contorno, -(op.folga + 0), e, 1);
+  // A chapa desliza DENTRO da lâmina, não dentro do biscoito: ela é um êmbolo
+  // que marca e empurra a massa pra fora. Por isso desconta meia lâmina antes
+  // da folga — sem isso ela encosta na parede e trava.
+  const chapa = deslocarLinha(contorno, -(op.espessuraLamina / 2 + op.folga), e, 1);
   const zRelevo = op.relevo;
   const zChapa = zRelevo + op.espessuraChapa;
 
@@ -624,4 +665,19 @@ export function montarCarimbo(op, contorno, laçosDetalhe) {
 
   return { tris, altura: zChapa + (op.botao > 0 ? op.alturaBotao : 0),
            volume: volume(tris) / 1000, detalhes: laçosDetalhe.length };
+}
+
+/**
+ * Espelha a peça em X, em volta do próprio centro.
+ *
+ * Espelhar inverte o sentido de giro de toda face, então cada triângulo também
+ * é invertido — senão a peça sai do avesso e o fatiador lê o dentro como fora.
+ */
+export function espelhar(tris) {
+  let mn = Infinity, mx = -Infinity;
+  for (const t of tris) for (const v of t) { if (v[0] < mn) mn = v[0]; if (v[0] > mx) mx = v[0]; }
+  const eixo = mn + mx;
+  return tris.map(([a, b, c]) => [
+    [eixo - c[0], c[1], c[2]], [eixo - b[0], b[1], b[2]], [eixo - a[0], a[1], a[2]],
+  ]);
 }

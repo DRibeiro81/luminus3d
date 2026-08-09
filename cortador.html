@@ -149,12 +149,11 @@
       <div class="caixa"><input type="checkbox" id="temCarimbo" checked>
         <span>Gerar o carimbo junto</span></div>
       <div id="ctlCarimbo">
-        <button class="vazio" id="btDetalhes">Imagem dos detalhes…</button>
-        <input type="file" id="arqDet" accept="image/*" hidden>
-        <p class="dica" id="statusDet">Nenhuma imagem de detalhe ainda.</p>
-        <label style="margin-top:10px">
+        <label>
           <div class="rot"><span>Onde separa o traço</span><span id="rDet">55%</span></div>
           <input type="range" id="limiarDet" min="10" max="90" step="1" value="55"></label>
+        <label><div class="rot"><span>Espessura do traço</span><span id="rTraco">1,0 mm</span></div>
+          <input type="range" id="traco" min="0.4" max="3" step="0.1" value="1"></label>
         <label><div class="rot"><span>Folga pra entrar no corte</span><span id="rFolga">0,4 mm</span></div>
           <input type="range" id="folga" min="0" max="1.5" step="0.1" value="0.4"></label>
         <label><div class="rot"><span>Altura do relevo</span><span id="rRelevo">2,0 mm</span></div>
@@ -163,11 +162,13 @@
           <input type="range" id="chapa" min="1.5" max="6" step="0.5" value="3"></label>
         <label><div class="rot"><span>Botão de apertar</span><span id="rBotao">14 mm</span></div>
           <input type="range" id="botao" min="0" max="30" step="1" value="14"></label>
-        <label><div class="rot"><span>Altura do botão</span><span id="rAltBotao">10 mm</span></div>
-          <input type="range" id="altBotao" min="4" max="25" step="1" value="10"></label>
-        <p class="dica">Use o <b>mesmo enquadramento</b> nas duas imagens: os detalhes são
-          encaixados no mesmo quadro da silhueta. Ele imprime com os detalhes na mesa e o
-          botão pra cima; na hora de usar é só virar.</p>
+        <label><div class="rot"><span>Altura do botão</span><span id="rAltBotao">22 mm</span></div>
+          <input type="range" id="altBotao" min="4" max="40" step="1" value="22"></label>
+        <div class="caixa"><input type="checkbox" id="espelhar" checked>
+          <span>Espelhar o carimbo</span></div>
+        <p class="dica" id="dicaCarimbo">Os detalhes saem da <b>mesma imagem</b>: são os traços
+          escuros de dentro da figura. A chapa desliza dentro da lâmina, então ela marca a massa
+          e empurra o biscoito pra fora.</p>
       </div>
     </div>
 
@@ -219,7 +220,8 @@
 <script type="module">
 import { montarCortador, montarPorContorno, montarCarimbo, maiorPedaco, preencherFuros,
          suavizar, borrar, contornos, suavizarLinha, decimar, paredeMaisFina, anel,
-         mover } from './cortador.js';
+         mover, espelhar, semBorda } from './cortador.js';
+import { engordar, encolher } from './texto.js';
 
 /** Largura em X que uma malha ocupa, pra pôr a peça seguinte ao lado. */
 function C0(tris) {
@@ -232,7 +234,7 @@ import { criarVisor } from './visor3d.js';
 
 const DENSIDADE = 1.24;
 const $ = (id) => document.getElementById(id);
-let imagem = null, imagemDet = null, nomeBase = 'cortador', ultimo = null, pendente = 0;
+let imagem = null, nomeBase = 'cortador', ultimo = null, pendente = 0;
 let visor = null, vendo = '3d';
 
 /* ---------------- imagem vira silhueta ---------------- */
@@ -282,13 +284,8 @@ function tirarFundo(d, C, L, tolerancia) {
   return figura;
 }
 
-function silhueta() {
-  if (!imagem) return null;
-  const e = +$('finura').value;
-  const lado = +$('lado').value;
-  // A grade acompanha o maior lado da peça: nem mais fina que a malha pedida,
-  // nem tão grossa que o desenho vire escada.
-  const n = Math.max(40, Math.min(700, Math.round(lado / e)));
+/** Rasteriza e recorta a figura com `n` células no maior lado da IMAGEM. */
+function extrair(n) {
   const escala = n / Math.max(imagem.width, imagem.height);
   const C = Math.max(8, Math.round(imagem.width * escala));
   const L = Math.max(8, Math.round(imagem.height * escala));
@@ -328,46 +325,71 @@ function silhueta() {
 
   const so = maiorPedaco(mm);
   let fig = $('furos').checked ? preencherFuros(so.mascara) : so.mascara;
-  const suaveCel = Math.round(+$('suave').value / (lado / n));
-  if (suaveCel > 0) {
-    fig = suavizar(fig, suaveCel);
-    // suavizar pode partir a figura em dois; fica com o maior de novo
-    fig = maiorPedaco(fig).mascara;
-    if ($('furos').checked) fig = preencherFuros(fig);
-  }
 
-  // Recorta no que a FIGURA ocupa. Sem isso, "maior lado 80 mm" valia pro quadro
-  // da imagem: um boneco pequeno numa foto grande saía com metade do tamanho
-  // pedido, e o número no rodapé mentia junto.
   let x0 = Infinity, x1 = -1, y0 = Infinity, y1 = -1;
   for (let j = 0; j < fig.length; j++) for (let i = 0; i < fig[0].length; i++) {
     if (!fig[j][i]) continue;
     if (i < x0) x0 = i; if (i > x1) x1 = i;
     if (j < y0) y0 = j; if (j > y1) y1 = j;
   }
-  if (x1 < 0) return { mascara: fig, sobraram: so.sobraram, mmPorCelula: lado / n };
-  const folgaCel = 3;
-  x0 = Math.max(0, x0 - folgaCel); y0 = Math.max(0, y0 - folgaCel);
-  x1 = Math.min(fig[0].length - 1, x1 + folgaCel); y1 = Math.min(fig.length - 1, y1 + folgaCel);
-  const cortada = [];
-  for (let j = y0; j <= y1; j++) cortada.push(fig[j].slice(x0, x1 + 1));
-  // a escala passa a sair da figura recortada, não do quadro
-  const maiorLadoCel = Math.max(cortada[0].length, cortada.length) - 2 * folgaCel;
-  // O quadro guarda o recorte pra a imagem dos detalhes passar exatamente pelo
-  // mesmo caminho. Sem isso os olhos do boneco caem fora do rosto.
-  return { mascara: cortada, sobraram: so.sobraram, mmPorCelula: lado / maiorLadoCel,
-           quadro: { C, L, x0: x0 - 1, y0: y0 - 1, w: x1 - x0 + 1, h: y1 - y0 + 1 } };
+  return { fig, so, C, L, x0, y0, x1, y1,
+           maiorLadoFigura: Math.max(x1 - x0 + 1, y1 - y0 + 1) };
 }
 
 /**
- * Detalhes no MESMO grid da silhueta, recortados por dentro dela.
+ * Silhueta na escala certa, em duas passadas.
  *
- * O encaixe é pelo quadro: as duas imagens são esticadas pro mesmo retângulo.
- * Por isso o aviso de usar o mesmo enquadramento — não tenho como adivinhar
- * onde o olho do boneco deveria cair se as fotos vierem cortadas diferente.
+ * A primeira passada é só pra descobrir quanto da imagem a figura ocupa. Sem
+ * ela, "finura 0,4 mm" valia pro quadro: numa foto com muita sobra a célula
+ * saía com 0,6 mm e o traço fino do desenho desaparecia antes de virar peça.
  */
-function mascaraDetalhes(sil) {
-  if (!imagemDet || !sil.quadro) return null;
+function silhueta() {
+  if (!imagem) return null;
+  const e = +$('finura').value;
+  const lado = +$('lado').value;
+  const alvo = Math.max(40, Math.min(900, Math.round(lado / e)));
+
+  let r = extrair(Math.min(500, alvo));
+  if (r.x1 < 0) return null;
+  // reescala pra a FIGURA ficar com `alvo` células no maior lado
+  const fator = r.maiorLadoFigura / Math.min(500, alvo);
+  if (fator > 0.05 && fator < 0.98) {
+    const n2 = Math.max(40, Math.min(1400, Math.round(alvo / fator)));
+    const r2 = extrair(n2);
+    if (r2.x1 >= 0) r = r2;
+  }
+
+  let fig = r.fig;
+  const mmPorCelula = lado / r.maiorLadoFigura;
+  const suaveCel = Math.round(+$('suave').value / mmPorCelula);
+  if (suaveCel > 0) {
+    fig = suavizar(fig, suaveCel);
+    fig = maiorPedaco(fig).mascara;
+    if ($('furos').checked) fig = preencherFuros(fig);
+  }
+
+  const folgaCel = 3;
+  const x0 = Math.max(0, r.x0 - folgaCel), y0 = Math.max(0, r.y0 - folgaCel);
+  const x1 = Math.min(fig[0].length - 1, r.x1 + folgaCel);
+  const y1 = Math.min(fig.length - 1, r.y1 + folgaCel);
+  const cortada = [];
+  for (let j = y0; j <= y1; j++) cortada.push(fig[j].slice(x0, x1 + 1));
+  // O quadro guarda o recorte pra a imagem dos detalhes passar exatamente pelo
+  // mesmo caminho. Sem isso os olhos do boneco caem fora do rosto.
+  return { mascara: cortada, sobraram: r.so.sobraram, mmPorCelula,
+           quadro: { C: r.C, L: r.L, x0: x0 - 1, y0: y0 - 1,
+                     w: x1 - x0 + 1, h: y1 - y0 + 1 } };
+}
+
+/**
+ * Detalhes tirados da MESMA imagem: são os traços escuros de dentro da figura.
+ *
+ * A silhueta é encolhida antes de cruzar com o traço, pra o contorno do próprio
+ * desenho não virar detalhe — ele já é a lâmina do cortador, marcá-lo de novo
+ * seria repetir a borda em relevo.
+ */
+function mascaraDetalhes(sil, recuoMm) {
+  if (!imagem || !sil.quadro) return null;
   const q = sil.quadro;
   const L = sil.mascara.length, C = sil.mascara[0].length;
   // mesma redução da silhueta, e depois o MESMO recorte
@@ -375,7 +397,7 @@ function mascaraDetalhes(sil) {
   cv.width = q.C; cv.height = q.L;
   const c = cv.getContext('2d', { willReadFrequently: true });
   c.fillStyle = '#fff'; c.fillRect(0, 0, q.C, q.L);
-  c.drawImage(imagemDet, 0, 0, q.C, q.L);
+  c.drawImage(imagem, 0, 0, q.C, q.L);
   const px = Math.max(0, Math.min(q.C - 1, q.x0));
   const py = Math.max(0, Math.min(q.L - 1, q.y0));
   const pw = Math.min(q.C - px, C), ph = Math.min(q.L - py, L);
@@ -394,7 +416,8 @@ function mascaraDetalhes(sil) {
     }
     m.push(linha);
   }
-  return m;
+  // o traço do próprio contorno já é a lâmina: sai fora
+  return semBorda(m, sil.mascara, Math.max(1, Math.round(recuoMm / sil.mmPorCelula)));
 }
 
 function calcular() {
@@ -430,19 +453,26 @@ function calcular() {
   // Carimbo ao lado, no mesmo arquivo. Só sai se houver imagem de detalhe:
   // chapa lisa não carimba nada e só gastaria filamento.
   let carimbo = null, tris = r.tris;
-  if ($('temCarimbo').checked && imagemDet) {
-    const md = mascaraDetalhes(s);
-    const laçosDet = contornos(borrar(preencherFuros(md), 2))
+  if ($('temCarimbo').checked) {
+    const recuo = op.espessuraLamina / 2 + +$('folga').value + 0.8;
+    let md = mascaraDetalhes(s, recuo);
+    // engorda o traço até a espessura pedida: linha fina demais não marca massa
+    const grosso = Math.max(0, Math.round((+$('traco').value - op.mmPorCelula) / 2 / op.mmPorCelula));
+    if (md && grosso > 0) md = engordar(md, grosso);
+    // borrão de raio 1, não 2: o traço é fino e o raio da silhueta o apagava
+    const laçosDet = md ? contornos(borrar(preencherFuros(md), 1))
       .map((l) => decimar(suavizarLinha(l, 2), 0.9))
-      .filter((l) => l.length > 12);
+      .filter((l) => l.length > 12) : [];
     if (laçosDet.length) {
       carimbo = montarCarimbo({
         mmPorCelula: op.mmPorCelula, folga: +$('folga').value,
+        espessuraLamina: op.espessuraLamina,
         relevo: +$('relevo').value, espessuraChapa: +$('chapa').value,
         botao: +$('botao').value, alturaBotao: +$('altBotao').value,
       }, laços[0], laçosDet);
+      let peça = $('espelhar').checked ? espelhar(carimbo.tris) : carimbo.tris;
       const largura = C0(r.tris);
-      tris = [...r.tris, ...mover(carimbo.tris, largura + 12, 0)];
+      tris = [...r.tris, ...mover(peça, largura + 12, 0)];
     }
   }
 
@@ -509,15 +539,18 @@ function mostrar(r) {
   $('dPedacos').textContent = r.pedacos === 1 ? 'peça inteira' : `${r.pedacos} soltos`;
   const g = r.volume * DENSIDADE;
   $('dPeso').textContent = `~${n(g)} g`;
-  $('dCarimbo').textContent = r.carimbo ? `${r.carimbo.detalhes} detalhes` :
-    ($('temCarimbo').checked ? 'falta a imagem' : 'sem carimbo');
+  $('dCarimbo').textContent = r.carimbo
+    ? `${r.carimbo.detalhes} traço(s)${$('espelhar').checked ? ', espelhado' : ''}`
+    : ($('temCarimbo').checked ? 'sem traço' : 'sem carimbo');
   $('dArq').textContent = `${(r.tris.length * 50 / 1e6).toFixed(1)} MB`;
   $('elCalc').href = `calculadora.html?peso=${g.toFixed(1)}`;
 
   const av = [];
   if (r.pedacos > 1) av.push(`A peça sai em ${r.pedacos} pedaços soltos: a figura tem furo e as lâminas de dentro não estão presas. Ligue "aba cheia" ou "fechar os furos".`);
   if (r.porGrade) av.push('Com aba cheia a borda sai em escada: a chapa maciça ainda segue a grade.');
-  if ($('temCarimbo').checked && !r.carimbo) av.push('Falta a imagem dos detalhes pra montar o carimbo.');
+  if ($('temCarimbo').checked && !r.carimbo) av.push('Não achei traço nenhum dentro da figura pra virar carimbo. Mexa em "onde separa o traço".');
+  if (r.carimbo && +$('altBotao').value + +$('chapa').value < +$('altura').value + 4)
+    av.push(`O botão precisa passar da lâmina pra você empurrar: some pelo menos ${Math.ceil(+$('altura').value + 4 - +$('chapa').value)} mm de altura nele.`);
   if (r.paredeFina < +$('bico').value * 2) av.push(`Parede de ${n(r.paredeFina, 2)} mm é fina demais pra cortar massa. Engrosse a lâmina.`);
   if (r.silhueta.sobraram > 0) av.push(`Descartei ${r.silhueta.sobraram} mancha(s) solta(s) do fundo.`);
   if (Math.max(r.largura, r.profundidade) > 210) av.push('Maior que a mesa da Kobra X (220 mm).');
@@ -536,19 +569,6 @@ function carregarArquivo(arq) {
   im.onload = () => { imagem = im; URL.revokeObjectURL(url); agendar(); };
   im.src = url;
 }
-$('btDetalhes').onclick = () => $('arqDet').click();
-$('arqDet').onchange = (e) => {
-  const arq = e.target.files[0];
-  if (!arq || !arq.type.startsWith('image/')) return;
-  const url = URL.createObjectURL(arq);
-  const im = new Image();
-  im.onload = () => {
-    imagemDet = im; URL.revokeObjectURL(url);
-    $('statusDet').textContent = `Detalhes: ${arq.name}`;
-    agendar();
-  };
-  im.src = url;
-};
 $('btEscolher').onclick = () => $('arquivo').click();
 $('arquivo').onchange = (e) => carregarArquivo(e.target.files[0]);
 for (const ev of ['dragenter', 'dragover']) document.addEventListener(ev, (e) => {
@@ -618,6 +638,7 @@ function rotulos() {
   $('rChapa').textContent = `${vg(+$('chapa').value)} mm`;
   $('rBotao').textContent = +$('botao').value === 0 ? 'sem botão' : `${$('botao').value} mm`;
   $('rAltBotao').textContent = `${$('altBotao').value} mm`;
+  $('rTraco').textContent = `${vg(+$('traco').value)} mm`;
   $('ctlCarimbo').hidden = !$('temCarimbo').checked;
 }
 document.querySelectorAll('aside input, aside select').forEach((el) =>
@@ -631,7 +652,7 @@ visor = criarVisor($('visor'), { giroInicial: 0, inclinaInicial: -1.05,
                                  distInicial: 1, enquadrar: true, fov: 0.5 });
 if (!visor.ok) { vendo = 'plano'; document.querySelector('.abas').hidden = true; }
 rotulos();
-window.__cortador = { calcular, aplicar, carregarArquivo, silhueta,
+window.__cortador = { calcular, aplicar, carregarArquivo, silhueta, mascaraDetalhes,
                       visor: () => visor, ver: () => vendo };
 </script>
 </body>
