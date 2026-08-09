@@ -223,7 +223,8 @@
 <script type="module">
 import { montarPorContorno, montarCarimbo, maiorPedaco, preencherFuros, suavizar,
          borrar, contornos, suavizarLinha, decimar, mover, espelhar, semBorda, deslocarLinha, abrirContorno,
-         filtrarPequenos, afinar, descolorir, tintaDoDesenho, preencherPoligono } from './cortador.js';
+         filtrarPequenos, afinar, descolorir, tintaDoDesenho, preencherPoligono,
+         pareceFoto } from './cortador.js';
 import { engordar, encolher } from './texto.js';
 
 /** Largura em X que uma malha ocupa, pra pôr a peça seguinte ao lado. */
@@ -679,13 +680,51 @@ function mostrar(r) {
 function agendar() { clearTimeout(pendente); pendente = setTimeout(() => aplicar(calcular()), 110); }
 
 /* ---------------- carregar figura ---------------- */
+/**
+ * Foto não serve pra este aplicativo, e é melhor dizer isso do que entregar peça
+ * ruim: a silhueta sai da inundação do fundo e o traço sai da divisa entre cores
+ * chapadas. Em foto não existe nem uma coisa nem outra.
+ *
+ * O corte é 68% de imagem lisa. Desenho fica em 75% pra cima; foto e render com
+ * sombra ficam em 63% pra baixo. A tabela medida está no cortador.js, junto da
+ * conta.
+ */
+function ehFoto(im) {
+  const n = 220;
+  const esc = n / Math.max(im.width, im.height);
+  const C = Math.max(8, Math.round(im.width * esc));
+  const L = Math.max(8, Math.round(im.height * esc));
+  const cv = document.createElement('canvas');
+  cv.width = C; cv.height = L;
+  const c = cv.getContext('2d', { willReadFrequently: true });
+  c.fillStyle = '#fff'; c.fillRect(0, 0, C, L);
+  c.drawImage(im, 0, 0, C, L);
+  const m = pareceFoto(c.getImageData(0, 0, C, L).data, C, L);
+  return { ...m, foto: m.liso < 0.68 };
+}
+
 function carregarArquivo(arq) {
   if (!arq || !arq.type.startsWith('image/')) return;
   nomeBase = (arq.name || 'cortador').replace(/\.[^.]+$/, '')
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cortador';
   const url = URL.createObjectURL(arq);
   const im = new Image();
-  im.onload = () => { imagem = im; URL.revokeObjectURL(url); agendar(); };
+  im.onload = () => {
+    URL.revokeObjectURL(url);
+    const m = ehFoto(im);
+    if (m.foto) {
+      imagem = null; ultimo = null;
+      $('btBaixar').disabled = true;
+      $('cena').hidden = true; $('tela').hidden = true; $('solta').hidden = false;
+      $('aviso').innerHTML = '<b>Isso é uma foto, e foto não vira cortador aqui.</b> '
+        + 'A lâmina sai da silhueta e o carimbo sai da divisa entre cores chapadas — '
+        + 'em foto tem degradê e sombra em todo lugar, o fundo vaza e o traço vira sujeira. '
+        + 'Mande um <b>desenho</b>: traço preto fechado sobre fundo branco, cores chapadas, '
+        + 'sem sombra. Desenho de colorir é o ideal.';
+      return;
+    }
+    imagem = im; agendar();
+  };
   im.src = url;
 }
 $('btEscolher').onclick = () => $('arquivo').click();
@@ -772,7 +811,7 @@ visor = criarVisor($('visor'), { giroInicial: 0, inclinaInicial: -1.05,
                                  distInicial: 1, enquadrar: true, fov: 0.5 });
 if (!visor.ok) { vendo = 'plano'; document.querySelector('.abas').hidden = true; }
 rotulos();
-window.__cortador = { calcular, aplicar, carregarArquivo, silhueta, mascaraDetalhes, bordasDoDesenho,
+window.__cortador = { calcular, aplicar, carregarArquivo, silhueta, mascaraDetalhes, bordasDoDesenho, ehFoto,
                       visor: () => visor, ver: () => vendo };
 </script>
 </body>

@@ -1186,3 +1186,44 @@ export function preencherPoligono(pontos, C, L) {
   }
   return m;
 }
+
+/**
+ * Diz o quanto a imagem é LISA: parte dela que tem o vizinho da mesma cor.
+ *
+ * É o que separa desenho de foto. Desenho vive de cor chapada, então a maior
+ * parte dos vizinhos é igual; foto tem degradê em toda parte e quase nenhum
+ * vizinho repete.
+ *
+ * Medido nos arquivos originais, sem encolher antes (encolher alisa o ruído do
+ * JPEG e falseia a conta — foi assim que a primeira calibragem saiu errada):
+ *
+ *   Minnie, desenho em JPEG    75%
+ *   Mickey, desenho em PNG     78%
+ *   render chapado             87 a 92%
+ *   ---------------------------------
+ *   render com sombra suave    63%
+ *   foto de peça no lápis      61%
+ *   foto de peça no vaso       58%
+ *   foto de peça na luz        48%
+ *
+ * Duas coisas que tentei e não entraram:
+ *
+ * - Medir o quanto a imagem se afasta de poucas cores chapadas NÃO separa: a
+ *   Minnie dá 16,5 e uma foto de peça dá 9,0.
+ * - Olhar também o vizinho a 4 casas, pra pegar degradê lento, derruba desenho
+ *   junto: a Minnie cai de 75% pra 64% e o degradê continua passando, porque
+ *   ele é lento demais pra acumular 6 em 4 pixels.
+ *
+ * Ou seja: um degradê muito suave e limpo passa por desenho. Fica assim de
+ * propósito — o que aparece de verdade é foto, e foto tem ruído.
+ */
+export function pareceFoto(d, C, L) {
+  let liso = 0, pares = 0;
+  for (let j = 0; j < L; j++) for (let i = 0; i < C - 1; i++) {
+    const p = (j * C + i) * 4;
+    const dh = Math.abs(d[p] - d[p+4]) + Math.abs(d[p+1] - d[p+5]) + Math.abs(d[p+2] - d[p+6]);
+    if (dh <= 6) liso++;
+    pares++;
+  }
+  return { liso: liso / (pares || 1) };
+}
