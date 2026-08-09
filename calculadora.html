@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calculadora de preço — Luminus 3D</title>
+<meta name="description" content="Calcule o custo real e o preço de venda de uma peça impressa em 3D: material, energia, desgaste da máquina, mão de obra, falhas e margem.">
+<style>
+  :root {
+    --papel: #f6f5f2; --branco: #fff; --tinta: #16181d; --fraco: #626a76;
+    --linha: #e3e0da; --ouro: #b8862b; --ouro-vivo: #d9a441; --escuro: #14161a;
+    
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--papel); color: var(--tinta);
+         font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  .dentro { max-width: 1140px; margin: 0 auto; padding: 0 22px; }
+
+  nav { background: var(--escuro); position: sticky; top: 0; z-index: 50; }
+  nav .dentro { display: flex; align-items: center; gap: 22px; height: 62px; }
+  nav img { height: 22px; display: block; }
+  .elos { display: flex; gap: 22px; margin-left: auto; font-size: 14px; color: #b9c0cb; }
+  .elos a { text-decoration: none; }
+  .elos a:hover { color: #fff; }
+  @media (max-width: 760px) { .elos a:nth-child(n+3) { display: none; } }
+
+  header { background: var(--branco); border-bottom: 1px solid var(--linha);
+           padding: 44px 0 38px; }
+  .selo { display: inline-block; font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+          font-weight: 700; color: var(--ouro); background: #f3e7cd;
+          padding: 6px 12px; border-radius: 999px; margin-bottom: 14px; }
+  h1 { font-size: clamp(28px, 4.2vw, 42px); margin: 0 0 10px; letter-spacing: -.024em; font-weight: 800; }
+  header p { color: var(--fraco); margin: 0; max-width: 640px; }
+
+  main { padding: 34px 0 70px; }
+  .colunas { display: grid; grid-template-columns: 1.15fr .85fr; gap: 24px; align-items: start; }
+  @media (max-width: 940px) { .colunas { grid-template-columns: 1fr; } }
+
+  .bloco { background: var(--branco); border: 1px solid var(--linha); border-radius: 16px;
+           padding: 22px; margin-bottom: 18px; }
+  .bloco > h2 { font-size: 17px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .bloco > .nota { color: var(--fraco); font-size: 13.5px; margin: 0 0 16px; }
+  details.bloco > summary { font-size: 17px; font-weight: 700; cursor: pointer; list-style: none;
+                            display: flex; justify-content: space-between; align-items: center; }
+  details.bloco > summary::-webkit-details-marker { display: none; }
+  details.bloco > summary::after { content: '+'; color: var(--fraco); font-weight: 400; font-size: 20px; }
+  details.bloco[open] > summary::after { content: '\2212'; }
+  details.bloco[open] > summary { margin-bottom: 16px; }
+
+  .campos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  @media (max-width: 520px) { .campos { grid-template-columns: 1fr; } }
+  .campo { display: flex; flex-direction: column; gap: 5px; }
+  .campo label { font-size: 13px; color: var(--fraco); font-weight: 600; }
+  .campo .caixa { display: flex; align-items: center; border: 1.5px solid var(--linha);
+                  border-radius: 10px; background: var(--branco); overflow: hidden; }
+  .campo .caixa:focus-within { border-color: var(--ouro); }
+  .campo .pre { padding: 0 0 0 11px; color: var(--fraco); font-size: 14px; }
+  .campo .pos { padding: 0 11px 0 0; color: var(--fraco); font-size: 13px; white-space: nowrap; }
+  .campo input { border: 0; outline: 0; width: 100%; padding: 11px 10px; font-size: 15px;
+                 background: transparent; color: inherit; font-variant-numeric: tabular-nums; }
+  .campo input[type=text] { font-variant-numeric: normal; }
+
+  /* ---- resultado ---- */
+  .placar { position: sticky; top: 84px; }
+  .destaque { background: var(--escuro); color: #fff; border-radius: 16px; padding: 24px; }
+  .destaque .rot { color: #9aa2ae; font-size: 13px; margin: 0 0 2px; }
+  .destaque .grande { font-size: 40px; font-weight: 800; letter-spacing: -.03em;
+                      color: var(--ouro-vivo); line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .destaque .par { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px;
+                   border-top: 1px solid #2b3038; padding-top: 18px; }
+  .destaque .par b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+
+  .linhas { list-style: none; padding: 0; margin: 0; }
+  .linhas li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0;
+               border-bottom: 1px dashed var(--linha); font-size: 14.5px; }
+  .linhas li:last-child { border-bottom: 0; }
+  .linhas span:last-child { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .linhas .soma { border-top: 2px solid var(--tinta); border-bottom: 0; margin-top: 6px;
+                  padding-top: 12px; font-weight: 700; }
+
+  .barra { display: flex; height: 10px; border-radius: 999px; overflow: hidden; margin: 14px 0 10px;
+           background: var(--papel); }
+  .barra i { display: block; }
+  .legenda { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12.5px; color: var(--fraco); }
+  .legenda span::before { content: ''; display: inline-block; width: 9px; height: 9px;
+                          border-radius: 3px; margin-right: 6px; background: var(--cor); }
+
+  .aviso { background: #fdf6e6; border: 1px solid #efdcae; color: #6b4f12; border-radius: 12px;
+           padding: 13px 15px; font-size: 14px; margin-top: 16px; }
+  .aviso b { color: #4d3a0c; }
+  .aviso:empty { display: none; }
+
+  .bt { display: inline-block; padding: 12px 20px; border-radius: 10px; text-decoration: none;
+        font-size: 14.5px; font-weight: 700; border: 0; cursor: pointer; font-family: inherit; }
+  .cheio { background: var(--escuro); color: #fff; }
+  .vazio { border: 1.5px solid var(--linha); background: var(--branco); color: inherit; }
+  .acoes { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+
+  footer { background: var(--escuro); color: #98a0ad; font-size: 14px; padding: 34px 0; }
+  footer a { color: #98a0ad; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="dentro">
+    <a href="index.html"><img src="img/logo-luminus.png" alt="Luminus 3D"></a>
+    <div class="elos">
+      <a href="index.html#aplicativos">Aplicativos</a>
+      <a href="index.html#modelagem">Modelagem</a>
+      <a href="index.html#impressao">Impressão</a>
+      <a href="index.html#contato">Contato</a>
+    </div>
+  </div>
+</nav>
+
+<header>
+  <div class="dentro">
+    <span class="selo">Ferramenta</span>
+    <h1>Quanto custa e por quanto vender.</h1>
+    <p>Some material, energia, desgaste da máquina, seu tempo e o risco de falha.
+      O que você configurar uma vez fica salvo neste navegador.</p>
+  </div>
+</header>
+
+<main>
+<div class="dentro colunas">
+
+  <div>
+    <div class="bloco">
+      <h2>A peça</h2>
+      <p class="nota">Peso e tempo saem prontos no rodapé dos nossos aplicativos, ou do seu fatiador.</p>
+      <div class="campos">
+        <div class="campo"><label for="peso">Peso da peça</label>
+          <div class="caixa"><input id="peso" type="number" min="0" step="0.1" value="25"><span class="pos">g</span></div></div>
+        <div class="campo"><label for="qtd">Quantidade</label>
+          <div class="caixa"><input id="qtd" type="number" min="1" step="1" value="1"><span class="pos">peças</span></div></div>
+        <div class="campo"><label for="horas">Tempo de impressão</label>
+          <div class="caixa"><input id="horas" type="number" min="0" step="0.1" value="2.5"><span class="pos">h</span></div></div>
+        <div class="campo"><label for="pos">Acabamento à mão</label>
+          <div class="caixa"><input id="pos" type="number" min="0" step="1" value="5"><span class="pos">min</span></div></div>
+        <div class="campo"><label for="embalagem">Embalagem</label>
+          <div class="caixa"><span class="pre">R$</span><input id="embalagem" type="number" min="0" step="0.1" value="1.5"></div></div>
+        <div class="campo"><label for="outros">Outros custos por peça</label>
+          <div class="caixa"><span class="pre">R$</span><input id="outros" type="number" min="0" step="0.1" value="0"></div></div>
+      </div>
+    </div>
+
+    <div class="bloco">
+      <h2>Risco e margem</h2>
+      <p class="nota">Falha é o que você joga fora: entupimento, peça soltando da mesa, erro de medida.</p>
+      <div class="campos">
+        <div class="campo"><label for="falha">Taxa de falha</label>
+          <div class="caixa"><input id="falha" type="number" min="0" max="90" step="1" value="8"><span class="pos">%</span></div></div>
+        <div class="campo"><label for="margem">Margem desejada</label>
+          <div class="caixa"><input id="margem" type="number" min="0" step="5" value="120"><span class="pos">%</span></div></div>
+      </div>
+    </div>
+
+    <details class="bloco" id="cfgRolo">
+      <summary>O filamento</summary>
+      <div class="campos">
+        <div class="campo"><label for="rolo">Preço do rolo</label>
+          <div class="caixa"><span class="pre">R$</span><input id="rolo" type="number" min="0" step="1" value="120"></div></div>
+        <div class="campo"><label for="pesoRolo">Peso do rolo</label>
+          <div class="caixa"><input id="pesoRolo" type="number" min="1" step="50" value="1000"><span class="pos">g</span></div></div>
+      </div>
+    </details>
+
+    <details class="bloco" id="cfgMaquina">
+      <summary>A máquina e a hora</summary>
+      <div class="campos">
+        <div class="campo"><label for="watts">Consumo da impressora</label>
+          <div class="caixa"><input id="watts" type="number" min="0" step="10" value="120"><span class="pos">W</span></div></div>
+        <div class="campo"><label for="kwh">Preço da energia</label>
+          <div class="caixa"><span class="pre">R$</span><input id="kwh" type="number" min="0" step="0.01" value="0.95"><span class="pos">/kWh</span></div></div>
+        <div class="campo"><label for="preco">Preço da impressora</label>
+          <div class="caixa"><span class="pre">R$</span><input id="preco" type="number" min="0" step="50" value="2500"></div></div>
+        <div class="campo"><label for="vida">Vida útil estimada</label>
+          <div class="caixa"><input id="vida" type="number" min="1" step="100" value="5000"><span class="pos">h</span></div></div>
+        <div class="campo"><label for="hora">Sua hora de trabalho</label>
+          <div class="caixa"><span class="pre">R$</span><input id="hora" type="number" min="0" step="1" value="30"><span class="pos">/h</span></div></div>
+        <div class="campo"><label for="ocupacao">Ocupação real da máquina</label>
+          <div class="caixa"><input id="ocupacao" type="number" min="10" max="100" step="5" value="70"><span class="pos">%</span></div></div>
+      </div>
+      <p class="nota" style="margin: 14px 0 0">Ocupação real é quanto do dia a impressora fica de
+        fato imprimindo. Ninguém chega a 100%: tem troca de peça, limpeza da mesa e o tempo em que
+        você não está por perto pra começar a próxima.</p>
+    </details>
+
+    <div class="acoes">
+      <button class="bt vazio" id="btLimpar" type="button">Voltar ao padrão</button>
+      <a class="bt vazio" href="index.html#aplicativos">Gerar uma peça nos aplicativos</a>
+    </div>
+  </div>
+
+  <div class="placar">
+    <div class="destaque">
+      <p class="rot">Preço de venda sugerido, por peça</p>
+      <div class="grande" id="rPreco">R$ 0,00</div>
+      <div class="par">
+        <div><span class="rot">Custo por peça</span><b id="rCusto">R$ 0,00</b></div>
+        <div><span class="rot">Lucro por peça</span><b id="rLucro">R$ 0,00</b></div>
+      </div>
+      <div class="par" style="margin-top: 14px;">
+        <div><span class="rot">O lote todo</span><b id="rLote">R$ 0,00</b></div>
+        <div><span class="rot">Lucro do lote</span><b id="rLucroLote">R$ 0,00</b></div>
+      </div>
+    </div>
+
+    <div class="bloco" style="margin-top: 18px;">
+      <h2>Onde o dinheiro vai</h2>
+      <div class="barra" id="barra"></div>
+      <div class="legenda" id="legenda"></div>
+      <ul class="linhas" id="quebra" style="margin-top: 14px;"></ul>
+    </div>
+
+    <div class="bloco">
+      <h2>Vale a pena imprimir?</h2>
+      <p class="nota">Margem por peça engana. O que decide é quanto a máquina rende por hora,
+        porque ela é o gargalo — e ela não faz duas peças ao mesmo tempo.</p>
+      <ul class="linhas">
+        <li><span>Lucro por hora de máquina</span><span id="rHora">—</span></li>
+        <li><span>Descontando a ocupação real</span><span id="rHoraReal">—</span></li>
+        <li><span>Peças pra pagar a impressora</span><span id="rPayback">—</span></li>
+      </ul>
+      <div class="aviso" id="aviso"></div>
+    </div>
+  </div>
+
+</div>
+</main>
+
+<footer>
+  <div class="dentro">Luminus 3D · <a href="index.html">voltar ao site</a></div>
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const CAMPOS = ['peso','qtd','horas','pos','embalagem','outros','falha','margem',
+                'rolo','pesoRolo','watts','kwh','preco','vida','hora','ocupacao'];
+// O que é configuração fica salvo; o que é da peça não, senão a próxima peça
+// nasce com o peso da anterior e ninguém percebe.
+const GUARDAR = ['rolo','pesoRolo','watts','kwh','preco','vida','hora','ocupacao','falha','margem'];
+const CHAVE = 'luminus3d.calculadora';
+
+const dinheiro = (v) => 'R$ ' + (isFinite(v) ? v : 0).toFixed(2).replace('.', ',');
+const num = (id) => { const v = parseFloat($(id).value); return isFinite(v) ? v : 0; };
+
+const PARTES = [
+  { id: 'material',  nome: 'Filamento',    cor: '#d9a441' },
+  { id: 'energia',   nome: 'Energia',      cor: '#5b8def' },
+  { id: 'maquina',   nome: 'Desgaste',     cor: '#8b6fd4' },
+  { id: 'trabalho',  nome: 'Seu tempo',    cor: '#2f9e6b' },
+  { id: 'extras',    nome: 'Embalagem e extras', cor: '#9aa2ae' },
+  { id: 'perda',     nome: 'Perda por falha',    cor: '#d9534f' },
+];
+
+function calcular() {
+  const h = num('horas');
+  const material = num('pesoRolo') > 0 ? (num('peso') / num('pesoRolo')) * num('rolo') : 0;
+  const energia  = (num('watts') / 1000) * h * num('kwh');
+  const maquina  = num('vida') > 0 ? (num('preco') / num('vida')) * h : 0;
+  const trabalho = (num('pos') / 60) * num('hora');
+  const extras   = num('embalagem') + num('outros');
+
+  const semFalha = material + energia + maquina + trabalho + extras;
+  // A falha não é desconto no preço: é o custo das peças que você jogou fora
+  // diluído nas que deram certo.
+  const perda = semFalha * (num('falha') / 100);
+  const custo = semFalha + perda;
+  const preco = custo * (1 + num('margem') / 100);
+  const lucro = preco - custo;
+
+  const q = Math.max(1, Math.round(num('qtd')));
+  const porHora = h > 0 ? lucro / h : 0;
+  const ocup = Math.min(100, Math.max(10, num('ocupacao'))) / 100;
+
+  return { material, energia, maquina, trabalho, extras, perda, custo, preco, lucro, q, h,
+           porHora, porHoraReal: porHora * ocup,
+           pecasPagar: lucro > 0 ? Math.ceil(num('preco') / lucro) : Infinity };
+}
+
+function mostrar() {
+  const r = calcular();
+  $('rPreco').textContent = dinheiro(r.preco);
+  $('rCusto').textContent = dinheiro(r.custo);
+  $('rLucro').textContent = dinheiro(r.lucro);
+  $('rLote').textContent = dinheiro(r.preco * r.q);
+  $('rLucroLote').textContent = dinheiro(r.lucro * r.q);
+
+  const total = r.custo || 1;
+  $('barra').innerHTML = PARTES.map((p) =>
+    `<i style="width:${(r[p.id] / total * 100).toFixed(2)}%;background:${p.cor}"></i>`).join('');
+  $('legenda').innerHTML = PARTES.map((p) =>
+    `<span style="--cor:${p.cor}">${p.nome}</span>`).join('');
+  $('quebra').innerHTML = PARTES.map((p) =>
+    `<li><span>${p.nome}</span><span>${dinheiro(r[p.id])}</span></li>`).join('')
+    + `<li class="soma"><span>Custo por peça</span><span>${dinheiro(r.custo)}</span></li>`;
+
+  $('rHora').textContent = r.h > 0 ? dinheiro(r.porHora) + ' /h' : '—';
+  $('rHoraReal').textContent = r.h > 0 ? dinheiro(r.porHoraReal) + ' /h' : '—';
+  $('rPayback').textContent = isFinite(r.pecasPagar) ? r.pecasPagar + ' peças' : '—';
+
+  const avisos = [];
+  if (r.h > 0 && r.porHoraReal < 6.35) {
+    avisos.push(`A <b>${dinheiro(r.porHoraReal)} por hora</b> de máquina, essa peça rende menos que
+      o piso de uma hora de trabalho no Brasil. Ou ela sobe de preço, ou imprime mais rápido,
+      ou não vale a máquina ocupada.`);
+  }
+  if (num('falha') === 0) avisos.push('Falha em 0% é otimista: uma peça perdida por mês já muda a conta.');
+  if (r.material > r.custo * 0.7) avisos.push('O filamento é quase todo o custo. Peça mais leve ou parede mais fina derruba o preço rápido.');
+  $('aviso').innerHTML = avisos.join('<br><br>');
+}
+
+function salvar() {
+  const dados = {};
+  for (const id of GUARDAR) dados[id] = $(id).value;
+  try { localStorage.setItem(CHAVE, JSON.stringify(dados)); } catch (e) { /* modo privado */ }
+}
+function carregar() {
+  try {
+    const dados = JSON.parse(localStorage.getItem(CHAVE) || '{}');
+    for (const id of GUARDAR) if (dados[id] !== undefined) $(id).value = dados[id];
+  } catch (e) { /* dado velho ou corrompido: fica no padrão */ }
+  // peso e tempo podem vir por link, pra o aplicativo mandar direto pra cá
+  const p = new URLSearchParams(location.search);
+  for (const id of ['peso','horas','qtd']) if (p.has(id)) $(id).value = p.get(id);
+}
+
+CAMPOS.forEach((id) => $(id).addEventListener('input', () => { salvar(); mostrar(); }));
+$('btLimpar').onclick = () => {
+  try { localStorage.removeItem(CHAVE); } catch (e) {}
+  location.href = location.pathname;
+};
+carregar();
+mostrar();
+window.__calc = { calcular, mostrar };
+</script>
+</body>
+</html>
