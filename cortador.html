@@ -150,8 +150,8 @@
         <label>
           <div class="rot"><span>Espessura da caneta</span><span id="rTraco">1,0 mm</span></div>
           <input type="range" id="traco" min="0.5" max="3" step="0.1" value="1"></label>
-        <label><div class="rot"><span>Quanto detalhe</span><span id="rDetalhe">mancha &lt; 2 mm</span></div>
-          <input type="range" id="detalhe" min="0" max="12" step="1" value="2"></label>
+        <label><div class="rot"><span>Quanto detalhe</span><span id="rDetalhe">mancha &lt; 1 mm</span></div>
+          <input type="range" id="detalhe" min="0" max="8" step="0.5" value="1"></label>
         <label><div class="rot"><span>Quantas cores</span><span id="rDet">6 cores</span></div>
           <input type="range" id="limiarDet" min="2" max="12" step="1" value="6"></label>
         <div class="caixa"><input type="checkbox" id="espelhar" checked>
@@ -437,27 +437,36 @@ function mascaraDetalhes(sil, recuoMm, mmPorCelula) {
   const lado = Math.max(2, +$('detalhe').value / mmFina);
   // O que conta como "traço" acompanha o tamanho da peça, não um número fixo em
   // milímetro: o mesmo desenho impresso em 80 ou em 200 mm tem o traço na mesma
-  // proporção. Uns 3,5% do maior lado.
-  const magreza = Math.max(2, Math.round(0.035 * +$('lado').value / 2 / mmFina));
+  // proporção.
+  //
+  // 2% do maior lado, e não 3,5%: em 3,5% a conta dava "traço até 2,9 mm", e a
+  // bolinha do laço da Minnie tem 3 mm — ela caía como traço, virava um pontinho
+  // de esqueleto, e o filtro de cisco matava o pontinho. Sumiam as quarenta.
+  const magreza = Math.max(2, Math.round(0.02 * +$('lado').value / 2 / mmFina));
+  // área do DISCO do diâmetro pedido, não do quadrado: com o quadrado o filtro
+  // saía 27% mais severo do que o rótulo promete
   const bordas = bordasDoDesenho(d, pw, ph, +$('limiarDet').value,
-                                 Math.round(lado * lado), magreza);
+                                 Math.round(Math.PI / 4 * lado * lado), magreza);
 
   // a silhueta na mesma grade fina, pra o recorte bater célula a célula
-  const dentro = [], m = [];
+  const dentro = [], m = { linhas: [], cheias: [] };
   for (let j = 0; j < ph; j++) {
-    const linha = new Uint8Array(pw), sil2 = new Uint8Array(pw);
+    const li = new Uint8Array(pw), ch = new Uint8Array(pw), sil2 = new Uint8Array(pw);
     const sj = Math.min(L - 1, (j / F) | 0);
     for (let i = 0; i < pw; i++) {
       sil2[i] = sil.mascara[sj][Math.min(C - 1, (i / F) | 0)];
       // traço só vale dentro da figura, senão vira um segundo contorno
       // colado na lâmina
-      linha[i] = (bordas[j][i] && sil2[i]) ? 1 : 0;
+      if (!sil2[i]) continue;
+      li[i] = bordas.linhas[j][i]; ch[i] = bordas.cheias[j][i];
     }
-    m.push(linha); dentro.push(sil2);
+    m.linhas.push(li); m.cheias.push(ch); dentro.push(sil2);
   }
   // o traço do próprio contorno já é a lâmina: sai fora
-  const limpo = semBorda(m, dentro, Math.max(1, Math.round(recuoMm / mmFina)));
-  return limpo ? { mascara: limpo, F, mmFina } : null;
+  const banda = Math.max(1, Math.round(recuoMm / mmFina));
+  const linhas = semBorda(m.linhas, dentro, banda);
+  const cheias = semBorda(m.cheias, dentro, banda);
+  return (linhas || cheias) ? { linhas, cheias, F, mmFina } : null;
 }
 
 function calcular() {
@@ -492,11 +501,19 @@ function calcular() {
       // Vira traço de caneta: afina tudo até uma linha só e engorda de volta na
       // espessura pedida. Assim mancha cheia e linha fina saem iguais, e some a
       // necessidade de ficar compensando espessura em três controles.
-      let md = afinar(det.mascara);
-      // a limpeza pesada é por região, lá em cima; aqui só cai cisco solto
-      md = filtrarPequenos(md, Math.max(4, Math.round(1.5 / mmFina)));
+      // Sem filtro de tamanho aqui. A limpeza já foi feita lá atrás, por ÁREA
+      // DE REGIÃO — então toda marca que chega aqui veio de uma região grande o
+      // bastante. Era um filtro nesta altura que matava as quarenta bolinhas do
+      // laço, que chegam como marca pequena mas legítima.
+      //
+      // E só a LINHA engorda até a caneta. A mancha cheia já tem o tamanho que
+      // tem no desenho: engordar junto inchava bolinha de 1,2 mm pra 2,2 mm.
       const grosso = Math.max(1, Math.round((+$('traco').value - mmFina) / 2 / mmFina));
-      md = engordar(md, grosso);
+      let md = det.linhas ? engordar(det.linhas, grosso) : null;
+      if (md && det.cheias) {
+        for (let j = 0; j < md.length; j++)
+          for (let i = 0; i < md[0].length; i++) if (det.cheias[j][i]) md[j][i] = 1;
+      } else md = md || det.cheias;
       // Agora o borrão vale a pena: nesta grade a caneta ocupa umas oito
       // células, então raio 2 come a escada e não a linha. As coordenadas
       // voltam divididas por F, que é a grade da lâmina.
@@ -504,7 +521,8 @@ function calcular() {
       // todo — tapar o miolo de cada laço transformava o rosto num disco
       laçosDet = contornos(borrar(md, 2))
         .map((l) => decimar(suavizarLinha(l.map(([x, y]) => [x / F, y / F]), 3), 0.5))
-        .filter((l) => l.length > 12);
+        // laço curto não é ruído: bolinha de 1 mm fecha em meia dúzia de pontos
+        .filter((l) => l.length >= 6);
     }
     if (laçosDet.length) {
       carimbo = montarCarimbo({
@@ -703,7 +721,7 @@ function rotulos() {
   $('rBotao').textContent = +$('botao').value === 0 ? 'sem botão' : `${$('botao').value} mm`;
   $('rTraco').textContent = `${vg(+$('traco').value)} mm`;
   $('rDet').textContent = `${$('limiarDet').value} cores`;
-  $('rDetalhe').textContent = +$('detalhe').value === 0 ? 'tudo' : `mancha < ${$('detalhe').value} mm`;
+  $('rDetalhe').textContent = +$('detalhe').value === 0 ? 'tudo' : `mancha < ${vg(+$('detalhe').value)} mm`;
   $('ctlCarimbo').hidden = !$('temCarimbo').checked;
 }
 document.querySelectorAll('aside input, aside select').forEach((el) =>

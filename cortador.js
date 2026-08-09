@@ -927,19 +927,29 @@ export function tintaDoDesenho(rot, C, L, minimoCelulas, magrezaCelulas) {
     if (dist[p] > gordura[fim[p]]) gordura[fim[p]] = dist[p];
   }
   const magra = (r) => gordura[r] <= magrezaCelulas;
+  // Bolinha não é traço curto: é mancha redonda. Reduzi-la ao esqueleto joga
+  // fora o tamanho dela — a bolinha do laço da Minnie virava um ponto de uma
+  // célula. Disco tem área ≈ 3,14 × gordura²; traço comprido tem MUITO mais.
+  // Até 6× ainda é redondo, e vale cheia, do tamanho que é.
+  const ponto = (r) => magra(r) && gordura[r] >= 2 && tam[r] <= 6 * gordura[r] * gordura[r];
 
-  const finas = [], m = [];
-  for (let j = 0; j < L; j++) { finas.push(new Uint8Array(C)); m.push(new Uint8Array(C)); }
-  for (let p = 0; p < n; p++) if (magra(fim[p])) finas[(p / C) | 0][p % C] = 1;
+  const finas = [], linhas = [], cheias = [];
+  for (let j = 0; j < L; j++) {
+    finas.push(new Uint8Array(C)); linhas.push(new Uint8Array(C)); cheias.push(new Uint8Array(C));
+  }
+  for (let p = 0; p < n; p++) if (magra(fim[p]) && !ponto(fim[p])) finas[(p / C) | 0][p % C] = 1;
   const centro = afinar(finas);
 
   for (let j = 0; j < L; j++) for (let i = 0; i < C; i++) {
     const p = j * C + i;
-    if (centro[j][i]) { m[j][i] = 1; continue; }
+    if (ponto(fim[p])) { cheias[j][i] = 1; continue; }
+    if (centro[j][i]) { linhas[j][i] = 1; continue; }
     if (magra(fim[p])) continue;                       // divisa de traço não conta
     const dir = i + 1 < C && fim[p+1] !== fim[p] && !magra(fim[p+1]);
     const bai = j + 1 < L && fim[p+C] !== fim[p] && !magra(fim[p+C]);
-    if (dir || bai) m[j][i] = 1;
+    if (dir || bai) linhas[j][i] = 1;
   }
-  return m;
+  // separadas de propósito: a linha ainda vai engordar até a espessura da
+  // caneta, e a mancha cheia não — ela já tem o tamanho que tem no desenho
+  return { linhas, cheias };
 }
