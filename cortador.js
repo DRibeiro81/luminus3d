@@ -221,3 +221,255 @@ export function montarCortador(op, mascara) {
     volume: celulas * e * e / 1000,
   };
 }
+
+/* ================================================================
+   Contorno traçado: a lâmina deixa de seguir a grade
+   ================================================================ */
+
+/**
+ * Borra a máscara pra virar um campo contínuo.
+ *
+ * É o que dá precisão abaixo da célula: numa máscara de 0 e 1 a borda só pode
+ * cair na linha da grade, e a peça sai serrilhada. Borrada, a borda vira uma
+ * rampa e o contorno pode cruzar a metade em qualquer ponto dentro da célula.
+ */
+export function borrar(m, raio) {
+  const L = m.length, C = m[0].length;
+  let campo = Array.from({ length: L }, (_, j) => Float32Array.from(m[j]));
+  for (let passo = 0; passo < 2; passo++) {          // duas passadas = quase gaussiano
+    const h = campo.map((linha) => {
+      const s = new Float32Array(C);
+      for (let i = 0; i < C; i++) {
+        let soma = 0, n = 0;
+        for (let d = -raio; d <= raio; d++) {
+          const x = i + d;
+          if (x < 0 || x >= C) continue;
+          soma += linha[x]; n++;
+        }
+        s[i] = soma / n;
+      }
+      return s;
+    });
+    const v = [];
+    for (let j = 0; j < L; j++) {
+      const s = new Float32Array(C);
+      for (let i = 0; i < C; i++) {
+        let soma = 0, n = 0;
+        for (let d = -raio; d <= raio; d++) {
+          const y = j + d;
+          if (y < 0 || y >= L) continue;
+          soma += h[y][i]; n++;
+        }
+        s[i] = soma / n;
+      }
+      v.push(s);
+    }
+    campo = v;
+  }
+  return campo;
+}
+
+/**
+ * Marching squares: devolve as linhas fechadas onde o campo cruza `iso`.
+ *
+ * Cada célula da grade vira 0, 1 ou 2 segmentos, com as pontas interpoladas em
+ * cima da aresta — é daí que vem a precisão abaixo da célula. Depois os
+ * segmentos são costurados pelas pontas até fechar cada laço.
+ */
+export function contornos(campo, iso = 0.5) {
+  const L = campo.length, C = campo[0].length;
+  const segmentos = [];
+  const entre = (a, b, xa, ya, xb, yb) => {
+    const t = Math.abs(b - a) < 1e-9 ? 0.5 : (iso - a) / (b - a);
+    return [xa + (xb - xa) * t, ya + (yb - ya) * t];
+  };
+
+  for (let j = 0; j < L - 1; j++) {
+    for (let i = 0; i < C - 1; i++) {
+      const a = campo[j][i], b = campo[j][i + 1];
+      const c = campo[j + 1][i + 1], d = campo[j + 1][i];
+      let caso = (a > iso ? 1 : 0) | (b > iso ? 2 : 0) | (c > iso ? 4 : 0) | (d > iso ? 8 : 0);
+      if (caso === 0 || caso === 15) continue;
+      const cima = () => entre(a, b, i, j, i + 1, j);
+      const dir  = () => entre(b, c, i + 1, j, i + 1, j + 1);
+      const baixo= () => entre(d, c, i, j + 1, i + 1, j + 1);
+      const esq  = () => entre(a, d, i, j, i, j + 1);
+      // Nos dois casos ambíguos (cantos opostos) o meio da célula decide, senão
+      // duas figuras que se tocam pela ponta podem virar uma só.
+      const meio = (a + b + c + d) / 4;
+      if (caso === 5 && meio <= iso) caso = 105;
+      if (caso === 10 && meio <= iso) caso = 110;
+      const por = (p, q) => segmentos.push([p, q]);
+      switch (caso) {
+        case 1: case 14: por(esq(), cima()); break;
+        case 2: case 13: por(cima(), dir()); break;
+        case 3: case 12: por(esq(), dir()); break;
+        case 4: case 11: por(dir(), baixo()); break;
+        case 6: case 9:  por(cima(), baixo()); break;
+        case 7: case 8:  por(esq(), baixo()); break;
+        case 5:  por(esq(), cima()); por(dir(), baixo()); break;
+        case 105: por(cima(), dir()); por(esq(), baixo()); break;
+        case 10: por(cima(), dir()); por(esq(), baixo()); break;
+        case 110: por(esq(), cima()); por(dir(), baixo()); break;
+      }
+    }
+  }
+
+  // Costura pelas DUAS pontas. Pela ponta de saída só, um segmento com o giro
+  // invertido interrompe o laço e a figura sai em pedaços — foi o que aconteceu.
+  const chave = (p) => `${Math.round(p[0] * 2048)},${Math.round(p[1] * 2048)}`;
+  const vizinhos = new Map();
+  segmentos.forEach((s, idx) => {
+    for (const ponta of [0, 1]) {
+      const k = chave(s[ponta]);
+      if (!vizinhos.has(k)) vizinhos.set(k, []);
+      vizinhos.get(k).push(idx);
+    }
+  });
+
+  const usado = new Uint8Array(segmentos.length);
+  const laços = [];
+  for (let inicio = 0; inicio < segmentos.length; inicio++) {
+    if (usado[inicio]) continue;
+    usado[inicio] = 1;
+    const linha = [segmentos[inicio][0], segmentos[inicio][1]];
+    let ponta = segmentos[inicio][1];
+    while (true) {
+      const lista = vizinhos.get(chave(ponta)) || [];
+      const prox = lista.find((idx) => !usado[idx]);
+      if (prox === undefined) break;
+      usado[prox] = 1;
+      const s = segmentos[prox];
+      // o segmento pode estar guardado ao contrário; segue pela outra ponta
+      ponta = chave(s[0]) === chave(ponta) ? s[1] : s[0];
+      linha.push(ponta);
+    }
+    if (linha.length > 8) {
+      if (chave(linha[0]) !== chave(linha[linha.length - 1])) linha.push(linha[0]);
+      laços.push(linha);
+    }
+  }
+
+  // Sentido de giro: o maior laço é o contorno de fora e gira positivo; todos os
+  // outros são furo e giram ao contrário. Sem isso a normal do furo aponta pro
+  // lado errado e a parede dele nasce virada do avesso.
+  if (laços.length) {
+    let maior = 0;
+    for (let i = 1; i < laços.length; i++)
+      if (Math.abs(areaComSinal(laços[i])) > Math.abs(areaComSinal(laços[maior]))) maior = i;
+    laços.forEach((l, i) => {
+      const quer = i === maior ? 1 : -1;
+      if (Math.sign(areaComSinal(l)) !== quer) l.reverse();
+    });
+  }
+  return laços;
+}
+
+/** Tira ponto que quase não muda nada: a curva fica igual com menos triângulo. */
+export function decimar(linha, minimo) {
+  if (linha.length < 4) return linha;
+  const saida = [linha[0]];
+  for (let i = 1; i < linha.length - 1; i++) {
+    const u = saida[saida.length - 1];
+    if (Math.hypot(linha[i][0] - u[0], linha[i][1] - u[1]) >= minimo) saida.push(linha[i]);
+  }
+  saida.push(saida[0]);
+  return saida.length > 8 ? saida : linha;
+}
+
+/** Chaikin: corta os cantos, duas passadas deixam a curva macia. */
+export function suavizarLinha(linha, passos = 2) {
+  let p = linha;
+  for (let k = 0; k < passos; k++) {
+    const novo = [];
+    for (let i = 0; i < p.length - 1; i++) {
+      const a = p[i], b = p[i + 1];
+      novo.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25]);
+      novo.push([a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+    }
+    novo.push(novo[0]);
+    p = novo;
+  }
+  return p;
+}
+
+/** Área com sinal: diz se o laço é contorno de fora ou de furo. */
+export function areaComSinal(linha) {
+  let a = 0;
+  for (let i = 0; i < linha.length - 1; i++)
+    a += linha[i][0] * linha[i + 1][1] - linha[i + 1][0] * linha[i][1];
+  return a / 2;
+}
+
+/**
+ * Monta a peça varrendo um perfil ao longo do contorno traçado.
+ *
+ * A parede de dentro é vertical do chão ao topo; o lado de fora é um perfil
+ * escalonado — aba larga embaixo, lâmina no meio, fio afinado em cima. Como o
+ * contorno tem precisão abaixo da célula, a borda sai lisa: nada de escada.
+ */
+export function montarPorContorno(op, laços) {
+  const e = op.mmPorCelula;
+  const meia = op.espessuraLamina / 2;
+  const alturaFio = Math.min(op.fio || 0, op.altura - op.alturaAba - 0.6);
+  const zFio = op.altura - Math.max(0, alturaFio);
+  // (deslocamento pra fora, altura). Deslocamento negativo entra pra dentro.
+  const perfil = [
+    [meia + op.larguraAba, 0],
+    [meia + op.larguraAba, op.alturaAba],
+    [meia, op.alturaAba],
+    [meia, zFio],
+    [Math.max(meia * 0.3, 0.12), op.altura],
+  ];
+  const dentro = -meia;
+
+  const tris = [];
+  const quad = (a, b, c, d) => { tris.push([a, b, c], [a, c, d]); };
+
+  for (const bruto of laços) {
+    const linha = bruto.slice(0, -1);            // fechado: a última repete a primeira
+    const n = linha.length;
+    if (n < 8) continue;
+    const fora = areaComSinal(bruto) > 0 ? 1 : -1;   // furo vira do avesso
+
+    // normal de cada ponto, média das duas arestas vizinhas
+    const nx = new Float64Array(n), ny = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const a = linha[(i - 1 + n) % n], b = linha[(i + 1) % n];
+      let dx = b[0] - a[0], dy = b[1] - a[1];
+      const c = Math.hypot(dx, dy) || 1;
+      dx /= c; dy /= c;
+      nx[i] = dy * fora; ny[i] = -dx * fora;      // perpendicular
+    }
+    // ponto do contorno deslocado de `d` mm, já em milímetros
+    const P = (i, d, z) => {
+      const p = linha[i];
+      return [(p[0] + nx[i] * (d / e)) * e, (p[1] + ny[i] * (d / e)) * e, z];
+    };
+
+    for (let i = 0; i < n; i++) {
+      const k = (i + 1) % n;
+      // parede de dentro, do chão ao topo
+      quad(P(i, dentro, 0), P(i, dentro, op.altura),
+           P(k, dentro, op.altura), P(k, dentro, 0));
+      // lado de fora, trecho a trecho do perfil
+      for (let s = 0; s < perfil.length - 1; s++) {
+        const [d0, z0] = perfil[s], [d1, z1] = perfil[s + 1];
+        quad(P(k, d0, z0), P(k, d1, z1), P(i, d1, z1), P(i, d0, z0));
+      }
+      // tampas de baixo e de cima
+      quad(P(i, dentro, 0), P(k, dentro, 0), P(k, perfil[0][0], 0), P(i, perfil[0][0], 0));
+      const topo = perfil[perfil.length - 1][0];
+      quad(P(i, dentro, op.altura), P(i, topo, op.altura),
+           P(k, topo, op.altura), P(k, dentro, op.altura));
+    }
+  }
+
+  // Volume EXATO, somado dos triângulos. A conta por comprimento do contorno
+  // vezes área do perfil errava 19% — e esse número vai direto pro peso e pro
+  // preço que o cliente vê.
+  let comprimento = 0;
+  for (const l of laços) for (let i = 0; i < l.length - 1; i++)
+    comprimento += Math.hypot(l[i+1][0]-l[i][0], l[i+1][1]-l[i][1]) * e;
+  return { tris, comprimento, volume: volume(tris) / 1000, laços: laços.length };
+}

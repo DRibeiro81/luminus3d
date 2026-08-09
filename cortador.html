@@ -189,7 +189,8 @@
 </main>
 
 <script type="module">
-import { montarCortador, maiorPedaco, preencherFuros, suavizar } from './cortador.js';
+import { montarCortador, montarPorContorno, maiorPedaco, preencherFuros, suavizar,
+         borrar, contornos, suavizarLinha, decimar, paredeMaisFina, anel } from './cortador.js';
 import { escreverStl } from './geometria.js';
 import { criarVisor } from './visor3d.js';
 
@@ -316,8 +317,29 @@ function calcular() {
     fio: +$('fio').value,
     abaCheia: $('abaCheia').checked,
   };
-  const r = montarCortador(op, s.mascara);
-  return { ...r, op, silhueta: s };
+  // Aba cheia continua pela grade: ela é uma chapa maciça, e chapa exige
+  // triangular polígono com furo — coisa pra outra rodada. Sem ela, que é o
+  // caso comum, a peça sai do contorno traçado e a borda fica lisa.
+  if (op.abaCheia) {
+    const r = montarCortador(op, s.mascara);
+    return { ...r, op, silhueta: s, porGrade: true };
+  }
+
+  const campo = borrar(s.mascara, 2);
+  const laços = contornos(campo)
+    .map((l) => decimar(suavizarLinha(l, 2), 0.9))
+    .filter((l) => l.length > 12);
+  if (!laços.length) return { vazio: true };
+  const r = montarPorContorno(op, laços);
+
+  // Aqui a parede é EXATA: quem manda nela é o perfil varrido, não a grade.
+  // Medir de novo na grade dava 0,40 mm com a lâmina em 1,0 e acendia um aviso
+  // falso, porque o anel de duas células some na primeira erosão.
+  const L = s.mascara.length, C = s.mascara[0].length;
+  return { ...r, op, silhueta: s, porGrade: false,
+           largura: C * op.mmPorCelula, profundidade: L * op.mmPorCelula, altura: op.altura,
+           pedacos: laços.length,
+           paredeFina: op.espessuraLamina };
 }
 
 /* ---------------- prévia plana ---------------- */
@@ -377,6 +399,7 @@ function mostrar(r) {
 
   const av = [];
   if (r.pedacos > 1) av.push(`A peça sai em ${r.pedacos} pedaços soltos: a figura tem furo e as lâminas de dentro não estão presas. Ligue "aba cheia" ou "fechar os furos".`);
+  if (r.porGrade) av.push('Com aba cheia a borda sai em escada: a chapa maciça ainda segue a grade.');
   if (r.paredeFina < +$('bico').value * 2) av.push(`Parede de ${n(r.paredeFina, 2)} mm é fina demais pra cortar massa. Engrosse a lâmina.`);
   if (r.silhueta.sobraram > 0) av.push(`Descartei ${r.silhueta.sobraram} mancha(s) solta(s) do fundo.`);
   if (Math.max(r.largura, r.profundidade) > 210) av.push('Maior que a mesa da Kobra X (220 mm).');
