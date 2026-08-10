@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desenhar em 3D — Luminus 3D</title>
+<style>
+  :root {
+    --bg: #14161a; --painel: #1c1f25; --linha: #2b3038;
+    --texto: #e7eaef; --fraco: #8b93a1; --destaque: #d9a441;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--texto); display: flex;
+    height: 100vh; overflow: hidden;
+  }
+  aside { width: 268px; flex: 0 0 268px; background: var(--painel);
+          border-right: 1px solid var(--linha); display: flex; flex-direction: column; }
+  aside > header { padding: 14px 16px 11px; border-bottom: 1px solid var(--linha); }
+  aside > .corpo { flex: 1; overflow-y: auto; padding: 0 16px 14px; }
+  aside > footer { padding: 11px 16px 13px; border-top: 1px solid var(--linha); }
+  h1 { font-size: 16px; margin: 0 0 2px; }
+  .sub { color: var(--fraco); font-size: 12px; }
+  .sub a { color: var(--destaque); }
+
+  .etapa { border-top: 1px solid var(--linha); margin-top: 12px; padding-top: 11px; }
+  .corpo > .etapa:first-child { border-top: 0; margin-top: 0; padding-top: 13px; }
+  .tit { color: var(--fraco); font-size: 11px; font-weight: 600; text-transform: uppercase;
+         letter-spacing: .08em; margin: 0 0 10px; }
+
+  label { display: block; margin-bottom: 9px; }
+  .rot { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .rot span:last-child { color: var(--destaque); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--destaque); }
+  input[type=text], input[type=number], select {
+    width: 100%; background: #12151a; color: var(--texto); border: 1px solid var(--linha);
+    border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 13px; }
+  .caixa { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; font-size: 13px; }
+  .caixa input { accent-color: var(--destaque); }
+  .dica { color: var(--fraco); font-size: 11.5px; line-height: 1.45; margin: 7px 0 0; }
+
+  /* paleta de ferramentas */
+  .paleta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .fer { background: #12151a; border: 1px solid var(--linha); border-radius: 9px;
+         color: var(--texto); padding: 9px 3px 7px; cursor: pointer; font: inherit;
+         font-size: 10.5px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .fer svg { width: 19px; height: 19px; stroke: currentColor; fill: none;
+             stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .fer:hover { border-color: #3c434e; }
+  .fer.on { background: var(--destaque); color: #1a1206; border-color: var(--destaque); }
+
+  .cores { display: flex; flex-wrap: wrap; gap: 6px; }
+  .cor { width: 26px; height: 26px; border-radius: 7px; border: 2px solid transparent;
+         cursor: pointer; padding: 0; }
+  .cor.on { border-color: #fff; }
+
+  button.acao { width: 100%; background: var(--destaque); color: #1a1206; border: 0;
+                border-radius: 10px; padding: 11px; font: inherit; font-weight: 600;
+                cursor: pointer; }
+  button.acao:disabled { background: #2a2f37; color: #656d7a; cursor: default; }
+  button.leve { background: #12151a; color: var(--texto); border: 1px solid var(--linha);
+                border-radius: 9px; padding: 7px 10px; font: inherit; font-size: 12.5px;
+                cursor: pointer; }
+  button.leve:hover { border-color: #3c434e; }
+  .linhaBotoes { display: flex; gap: 6px; }
+  .linhaBotoes button { flex: 1; }
+
+  /* área central */
+  main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .telas { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+  .tela { position: relative; min-width: 0; }
+  .tela + .tela { border-left: 1px solid var(--linha); }
+  .tela canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+  .selo { position: absolute; top: 10px; left: 12px; font-size: 11px; color: var(--fraco);
+          background: rgba(20,22,26,.78); padding: 3px 8px; border-radius: 6px;
+          pointer-events: none; letter-spacing: .04em; text-transform: uppercase; }
+  .canto { position: absolute; top: 8px; right: 10px; display: flex; gap: 6px; }
+
+  .rodape { border-top: 1px solid var(--linha); background: var(--painel);
+            padding: 9px 16px; display: flex; gap: 22px; align-items: center;
+            font-size: 12px; flex-wrap: wrap; }
+  .dado span { color: var(--fraco); display: block; font-size: 10.5px;
+               text-transform: uppercase; letter-spacing: .05em; }
+  .dado b { font-size: 14px; font-weight: 600; }
+  #aviso { color: var(--destaque); font-size: 12px; margin-left: auto; text-align: right;
+           max-width: 460px; }
+
+  #solta { position: absolute; inset: 0; display: flex; align-items: center;
+           justify-content: center; color: var(--fraco); font-size: 13px; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<aside>
+  <header>
+    <h1>Desenhar em 3D</h1>
+    <div class="sub">Rabisque de um lado, a peça nasce do outro.
+      <a href="index.html">Início</a> ·
+      <a href="app.html">Retrato em Linhas</a> ·
+      <a href="luz.html">Foto Mágica</a> ·
+      <a href="vaso.html">Vaso e Abajur</a> ·
+      <a href="texto.html">Lápis com Nome</a> ·
+      <a href="cortador.html">Cortador de Biscoito</a></div>
+  </header>
+
+  <div class="corpo">
+    <div class="etapa">
+      <p class="tit">Desenhar</p>
+      <div class="paleta" id="paleta"></div>
+      <div class="caixa" style="margin-top:10px">
+        <input type="checkbox" id="espelho"><span>Espelho: desenha dos dois lados</span></div>
+      <div class="caixa">
+        <input type="checkbox" id="rabisco"><span>Modo rabisco: a cor manda na altura</span></div>
+      <p class="dica" id="dicaFer">Escolha uma ferramenta e arraste na tela da esquerda.</p>
+    </div>
+
+    <div class="etapa">
+      <p class="tit">Cor</p>
+      <div class="cores" id="cores"></div>
+      <label style="margin-top:10px">
+        <div class="rot"><span>Grossura do traço</span><span id="rTraco">2,0 mm</span></div>
+        <input type="range" id="traco" min="0.4" max="10" step="0.2" value="2"></label>
+    </div>
+
+    <div class="etapa" id="painelForma">
+      <p class="tit">A forma escolhida</p>
+      <label><div class="rot"><span>Altura</span><span id="rAltura">4,0 mm</span></div>
+        <input type="range" id="altura" min="0.4" max="60" step="0.2" value="4"></label>
+      <label><div class="rot"><span>Começa em</span><span id="rBase">0,0 mm</span></div>
+        <input type="range" id="base" min="0" max="60" step="0.5" value="0"></label>
+      <div class="caixa"><input type="checkbox" id="furo">
+        <span>É furo: corta o que estiver embaixo</span></div>
+      <div class="linhaBotoes">
+        <button class="leve" id="btFrente">Trazer pra frente</button>
+        <button class="leve" id="btApagar">Apagar</button>
+      </div>
+      <p class="dica" id="semForma">Nada escolhido. Clique numa forma com a seta.</p>
+    </div>
+
+    <div class="etapa">
+      <p class="tit">Trazer de fora</p>
+      <div class="linhaBotoes">
+        <button class="leve" id="btImagem">Imagem…</button>
+        <button class="leve" id="btTexto">Texto…</button>
+      </div>
+      <input type="file" id="arquivo" accept="image/*" hidden>
+      <p class="dica">Imagem entra pelo contorno dela: desenho de traço preto em fundo branco
+        é o que sai melhor. Foto não serve.</p>
+    </div>
+
+    <div class="etapa">
+      <p class="tit">Tamanho da peça</p>
+      <label><div class="rot"><span>Maior lado</span><span id="rLado">80 mm</span></div>
+        <input type="range" id="lado" min="20" max="200" step="5" value="80"></label>
+      <p class="dica">O desenho inteiro é redimensionado pra caber nessa medida.</p>
+    </div>
+  </div>
+
+  <footer>
+    <button class="acao" id="btBaixar" disabled>Baixar STL</button>
+    <div class="linhaBotoes" style="margin-top:8px">
+      <button class="leve" id="btDesfazer">Desfazer</button>
+      <button class="leve" id="btRefazer">Refazer</button>
+      <button class="leve" id="btLimpar">Limpar</button>
+    </div>
+  </footer>
+</aside>
+
+<main>
+  <div class="telas">
+    <div class="tela">
+      <span class="selo">Desenho</span>
+      <div class="canto"><button class="leve" id="btEnquadrar">Enquadrar</button></div>
+      <canvas id="plano"></canvas>
+      <div id="solta">Arraste pra desenhar. Ou solte uma imagem aqui.</div>
+    </div>
+    <div class="tela">
+      <span class="selo">Peça em 3D</span>
+      <canvas id="visor"></canvas>
+    </div>
+  </div>
+  <div class="rodape">
+    <div class="dado"><span>Peça</span><b id="dMedida">—</b></div>
+    <div class="dado"><span>Formas</span><b id="dFormas">0</b></div>
+    <div class="dado"><span>Filamento</span><b id="dPeso">—</b></div>
+    <div class="dado"><span>Arquivo</span><b id="dArquivo">—</b></div>
+    <div id="aviso"></div>
+  </div>
+</main>
+
+<script type="module">
+import { montar, retangulo, elipse, estrela, arco, limites, espelharPontos } from './modelador.js';
+import { contornos, suavizarLinha, decimar, areaComSinal, borrar } from './cortador.js';
+import { escreverStl } from './geometria.js';
+import { criarVisor } from './visor3d.js';
+
+const $ = (id) => document.getElementById(id);
+const vg = (n, c = 1) => n.toFixed(c).replace('.', ',');
+
+/* ---------------- estado ---------------- */
+
+// Cada forma é um objeto simples e vetorial. Nada de malha guardada: a malha é
+// recalculada, então mover um ponto continua barato e a peça nunca "desanda".
+let formas = [];
+let escolhida = null;
+let ferramenta = 'seta';
+let cor = '#4ec9b0';
+let proximoId = 1;
+
+const ALTURA_DA_COR = {                 // modo rabisco: a cor é a camada
+  '#4ec9b0': 4, '#d9a441': 8, '#e0446a': 12, '#5db7f0': 16,
+  '#9b7fe0': 20, '#8fce5a': 2, '#e8e8e8': 24, '#7b8494': 1,
+};
+const CORES = Object.keys(ALTURA_DA_COR);
+
+const historico = [];
+let ondeNoHistorico = -1;
+
+function guardar() {
+  historico.length = Math.min(historico.length, ondeNoHistorico + 1);
+  historico.push(JSON.stringify(formas));
+  if (historico.length > 60) historico.shift();
+  ondeNoHistorico = historico.length - 1;
+  atualizarBotoes();
+}
+function voltar(passo) {
+  const alvo = ondeNoHistorico + passo;
+  if (alvo < 0 || alvo >= historico.length) return;
+  ondeNoHistorico = alvo;
+  formas = JSON.parse(historico[alvo]);
+  escolhida = null;
+  atualizarBotoes(); pintar(); agendar();
+}
+function atualizarBotoes() {
+  $('btDesfazer').disabled = ondeNoHistorico <= 0;
+  $('btRefazer').disabled = ondeNoHistorico >= historico.length - 1;
+}
+
+/* ---------------- ferramentas ---------------- */
+
+const FERRAMENTAS = [
+  { id: 'seta',      nome: 'Escolher', svg: '<path d="M5 3l13 8-6 1-2 6z"/>' },
+  { id: 'livre',     nome: 'Traço',    svg: '<path d="M3 16c3-9 6 6 9-3s5 4 9-1"/>' },
+  { id: 'linha',     nome: 'Linha',    svg: '<path d="M4 18L18 5"/>' },
+  { id: 'arco',      nome: 'Arco',     svg: '<path d="M4 17a9 9 0 0 1 14-7"/>' },
+  { id: 'retangulo', nome: 'Retângulo',svg: '<rect x="4" y="6" width="14" height="11" rx="1.5"/>' },
+  { id: 'circulo',   nome: 'Círculo',  svg: '<circle cx="11" cy="11" r="7"/>' },
+  { id: 'estrela',   nome: 'Estrela',  svg: '<path d="M11 3l2.4 5.2 5.6.7-4.2 3.9 1.1 5.6L11 15.7 6.1 18.4l1.1-5.6L3 8.9l5.6-.7z"/>' },
+  { id: 'borracha',  nome: 'Borracha', svg: '<path d="M8 18H4l-1-4 9-9 6 6-7 7z"/>' },
+];
+
+$('paleta').innerHTML = FERRAMENTAS.map((f) =>
+  `<button class="fer" data-fer="${f.id}"><svg viewBox="0 0 22 22">${f.svg}</svg>${f.nome}</button>`).join('');
+$('paleta').onclick = (e) => {
+  const b = e.target.closest('[data-fer]');
+  if (!b) return;
+  ferramenta = b.dataset.fer;
+  marcarFerramenta();
+};
+function marcarFerramenta() {
+  for (const b of $('paleta').children) b.classList.toggle('on', b.dataset.fer === ferramenta);
+  const texto = {
+    seta: 'Clique numa forma pra escolher. Arraste pra mover.',
+    livre: 'Arraste livre. Solte e vira uma peça com altura.',
+    linha: 'Arraste de um ponto ao outro. Sai uma barra da grossura do traço.',
+    arco: 'Arraste pra definir as pontas; o arco curva pra onde você soltar.',
+    retangulo: 'Arraste a diagonal.',
+    circulo: 'Arraste do centro pra fora.',
+    estrela: 'Arraste do centro pra fora.',
+    borracha: 'Clique na forma que quer apagar.',
+  }[ferramenta];
+  $('dicaFer').textContent = texto;
+}
+
+$('cores').innerHTML = CORES.map((c) =>
+  `<button class="cor" data-cor="${c}" style="background:${c}" title="${c}"></button>`).join('');
+$('cores').onclick = (e) => {
+  const b = e.target.closest('[data-cor]');
+  if (!b) return;
+  cor = b.dataset.cor;
+  marcarCor();
+  if (escolhida) { escolhida.cor = cor; if ($('rabisco').checked) aplicarRabisco(escolhida); guardar(); pintar(); agendar(); }
+};
+function marcarCor() {
+  for (const b of $('cores').children) b.classList.toggle('on', b.dataset.cor === cor);
+}
+function aplicarRabisco(f) { f.altura = ALTURA_DA_COR[f.cor] || 4; f.base = 0; }
+
+/* ---------------- tela de desenho ---------------- */
+
+const tela = $('plano');
+const ctx = tela.getContext('2d');
+let vista = { x: 0, y: 0, zoom: 3 };      // pixels por milímetro
+
+const paraTela = ([x, y]) => [(x - vista.x) * vista.zoom, (y - vista.y) * vista.zoom];
+const paraMm = (px, py) => [px / vista.zoom + vista.x, py / vista.zoom + vista.y];
+
+function ajustarTela() {
+  const r = tela.getBoundingClientRect();
+  const d = window.devicePixelRatio || 1;
+  tela.width = Math.round(r.width * d); tela.height = Math.round(r.height * d);
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  pintar();
+}
+new ResizeObserver(ajustarTela).observe(tela);
+
+function enquadrar() {
+  const cx = limites(formas, 6);
+  const r = tela.getBoundingClientRect();
+  if (!cx) { vista = { x: -r.width / 6, y: -r.height / 6, zoom: 3 }; pintar(); return; }
+  const z = Math.min(r.width / (cx.x1 - cx.x0), r.height / (cx.y1 - cx.y0)) * 0.92;
+  vista.zoom = Math.max(0.4, Math.min(40, z));
+  vista.x = (cx.x0 + cx.x1) / 2 - r.width / 2 / vista.zoom;
+  vista.y = (cx.y0 + cx.y1) / 2 - r.height / 2 / vista.zoom;
+  pintar();
+}
+$('btEnquadrar').onclick = enquadrar;
+
+function caminho(c, pontos, fechado) {
+  const p = pontos.map(paraTela);
+  c.beginPath();
+  c.moveTo(p[0][0], p[0][1]);
+  for (const q of p.slice(1)) c.lineTo(q[0], q[1]);
+  if (fechado) c.closePath();
+}
+
+function pintar() {
+  const r = tela.getBoundingClientRect();
+  ctx.clearRect(0, 0, r.width, r.height);
+  ctx.fillStyle = '#0f1114'; ctx.fillRect(0, 0, r.width, r.height);
+
+  // grade de 10 mm, com uma linha mais forte a cada 50
+  const passo = 10 * vista.zoom;
+  if (passo > 5) {
+    const ini = paraMm(0, 0), fim = paraMm(r.width, r.height);
+    for (let x = Math.floor(ini[0] / 10) * 10; x <= fim[0]; x += 10) {
+      ctx.strokeStyle = (Math.round(x) % 50 === 0) ? '#242932' : '#1a1e25';
+      ctx.beginPath(); const t = paraTela([x, 0])[0];
+      ctx.moveTo(t, 0); ctx.lineTo(t, r.height); ctx.stroke();
+    }
+    for (let y = Math.floor(ini[1] / 10) * 10; y <= fim[1]; y += 10) {
+      ctx.strokeStyle = (Math.round(y) % 50 === 0) ? '#242932' : '#1a1e25';
+      ctx.beginPath(); const t = paraTela([0, y])[1];
+      ctx.moveTo(0, t); ctx.lineTo(r.width, t); ctx.stroke();
+    }
+  }
+
+  for (const f of formas) {
+    const listas = [f.pontos];
+    if (f.espelho != null) listas.push(espelharPontos(f.pontos, f.espelho));
+    for (const pts of listas) {
+      if (pts.length < 2) continue;
+      caminho(ctx, pts, f.fechado);
+      if (f.fechado) {
+        ctx.fillStyle = f.furo ? '#0f1114' : f.cor;
+        ctx.globalAlpha = f.furo ? 1 : 0.85;
+        ctx.fill('evenodd');
+        ctx.globalAlpha = 1;
+        if (f.furosInternos) for (const h of f.furosInternos) {
+          const hh = f.espelho != null && pts !== f.pontos ? espelharPontos(h, f.espelho) : h;
+          caminho(ctx, hh, true); ctx.fillStyle = '#0f1114'; ctx.fill();
+        }
+      }
+      ctx.strokeStyle = f.furo ? '#e0446a' : f.cor;
+      ctx.lineWidth = Math.max(1, (f.fechado ? 1 / vista.zoom : f.traco) * vista.zoom);
+      ctx.lineCap = ctx.lineJoin = 'round';
+      ctx.stroke();
+      if (f === escolhida) {
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+        caminho(ctx, pts, f.fechado); ctx.stroke(); ctx.setLineDash([]);
+      }
+    }
+  }
+
+  if (previa) {
+    ctx.strokeStyle = cor; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    caminho(ctx, previa.pontos, previa.fechado); ctx.stroke(); ctx.setLineDash([]);
+  }
+  if ($('espelho').checked) {
+    const x = paraTela([eixoEspelho(), 0])[0];
+    ctx.strokeStyle = '#5db7f0'; ctx.setLineDash([3, 5]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, r.height); ctx.stroke(); ctx.setLineDash([]);
+  }
+  $('solta').hidden = formas.length > 0;
+}
+
+function eixoEspelho() {
+  const cx = limites(formas, 0);
+  if (!cx) { const r = tela.getBoundingClientRect(); return paraMm(r.width / 2, 0)[0]; }
+  return (cx.x0 + cx.x1) / 2;
+}
+
+/* ---------------- desenhar com o ponteiro ---------------- */
+
+let arrastando = null, previa = null;
+
+tela.addEventListener('pointerdown', (e) => {
+  tela.setPointerCapture(e.pointerId);
+  const r = tela.getBoundingClientRect();
+  const p = paraMm(e.clientX - r.left, e.clientY - r.top);
+  if (e.button === 1 || e.shiftKey) { arrastando = { tipo: 'mover-vista', de: p }; return; }
+
+  if (ferramenta === 'seta') {
+    const f = acharForma(p);
+    escolhida = f; mostrarForma();
+    arrastando = f ? { tipo: 'mover-forma', de: p, alvo: f } : null;
+    pintar(); return;
+  }
+  if (ferramenta === 'borracha') {
+    const f = acharForma(p);
+    if (f) { formas = formas.filter((x) => x !== f); escolhida = null; guardar(); pintar(); agendar(); }
+    return;
+  }
+  arrastando = { tipo: 'desenhar', de: p, pontos: [p] };
+  previa = { pontos: [p, p], fechado: false };
+});
+
+tela.addEventListener('pointermove', (e) => {
+  if (!arrastando) return;
+  const r = tela.getBoundingClientRect();
+  const p = paraMm(e.clientX - r.left, e.clientY - r.top);
+
+  if (arrastando.tipo === 'mover-vista') {
+    vista.x -= p[0] - arrastando.de[0]; vista.y -= p[1] - arrastando.de[1];
+    pintar(); return;
+  }
+  if (arrastando.tipo === 'mover-forma') {
+    const dx = p[0] - arrastando.de[0], dy = p[1] - arrastando.de[1];
+    arrastando.alvo.pontos = arrastando.alvo.pontos.map(([x, y]) => [x + dx, y + dy]);
+    if (arrastando.alvo.furosInternos)
+      arrastando.alvo.furosInternos = arrastando.alvo.furosInternos.map(
+        (h) => h.map(([x, y]) => [x + dx, y + dy]));
+    arrastando.de = p; pintar(); agendar(); return;
+  }
+
+  arrastando.pontos.push(p);
+  previa = formaDoArrasto(arrastando.de, p, arrastando.pontos);
+  pintar();
+});
+
+tela.addEventListener('pointerup', () => {
+  if (arrastando && arrastando.tipo === 'desenhar' && previa && previa.pontos.length > 1) {
+    const nova = {
+      id: proximoId++, ...previa, cor,
+      traco: +$('traco').value, altura: +$('altura').value, base: +$('base').value,
+      furo: $('furo').checked, espelho: $('espelho').checked ? eixoEspelho() : null,
+    };
+    if ($('rabisco').checked) aplicarRabisco(nova);
+    formas.push(nova); escolhida = nova; mostrarForma();
+    guardar(); agendar();
+  }
+  arrastando = null; previa = null; pintar();
+});
+
+function formaDoArrasto(a, b, todos) {
+  switch (ferramenta) {
+    case 'livre': {
+      // Rabisco que volta perto de onde começou vira ÁREA. É o que a pessoa
+      // espera ao contornar uma forma: sai uma peça cheia, não um fio.
+      const p = decimar(suavizarLinha(todos, 2), 0.25);
+      const volta = p.length > 6 && Math.hypot(p[0][0] - p[p.length-1][0],
+                                               p[0][1] - p[p.length-1][1]) < 6;
+      return { pontos: p, fechado: volta };
+    }
+    case 'linha': return { pontos: [a, b], fechado: false };
+    case 'arco': {
+      const meio = todos[Math.floor(todos.length / 2)] || [(a[0]+b[0])/2, (a[1]+b[1])/2];
+      return { pontos: arco(a, meio, b), fechado: false };
+    }
+    case 'retangulo': return { pontos: retangulo(Math.min(a[0], b[0]), Math.min(a[1], b[1]),
+                                Math.abs(b[0]-a[0]), Math.abs(b[1]-a[1])), fechado: true };
+    case 'circulo': { const r = Math.hypot(b[0]-a[0], b[1]-a[1]);
+                      return { pontos: elipse(a[0], a[1], r, r), fechado: true }; }
+    case 'estrela': { const r = Math.hypot(b[0]-a[0], b[1]-a[1]);
+                      return { pontos: estrela(a[0], a[1], r, r * 0.45), fechado: true }; }
+    default: return null;
+  }
+}
+
+function acharForma(p) {
+  // de trás pra frente: o que foi desenhado por último está por cima
+  for (let i = formas.length - 1; i >= 0; i--) {
+    const f = formas[i];
+    const listas = [f.pontos];
+    if (f.espelho != null) listas.push(espelharPontos(f.pontos, f.espelho));
+    for (const pts of listas) {
+      if (f.fechado && dentroDo(p, pts)) return f;
+      if (!f.fechado && pertoDaLinha(p, pts, Math.max(f.traco, 3 / vista.zoom))) return f;
+    }
+  }
+  return null;
+}
+function dentroDo(p, l) {
+  let d = false;
+  for (let i = 0, j = l.length - 1; i < l.length; j = i++) {
+    const [xi, yi] = l[i], [xj, yj] = l[j];
+    if ((yi > p[1]) !== (yj > p[1]) && p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi) d = !d;
+  }
+  return d;
+}
+function pertoDaLinha(p, l, r) {
+  for (let i = 0; i + 1 < l.length; i++) {
+    const [x0, y0] = l[i], [x1, y1] = l[i + 1];
+    const vx = x1 - x0, vy = y1 - y0, L2 = vx * vx + vy * vy;
+    let t = L2 ? ((p[0] - x0) * vx + (p[1] - y0) * vy) / L2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    if (Math.hypot(p[0] - (x0 + t * vx), p[1] - (y0 + t * vy)) <= r) return true;
+  }
+  return false;
+}
+
+tela.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const r = tela.getBoundingClientRect();
+  const antes = paraMm(e.clientX - r.left, e.clientY - r.top);
+  vista.zoom = Math.max(0.4, Math.min(40, vista.zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12)));
+  const depois = paraMm(e.clientX - r.left, e.clientY - r.top);
+  vista.x += antes[0] - depois[0]; vista.y += antes[1] - depois[1];
+  pintar();
+}, { passive: false });
+
+/* ---------------- propriedades da forma ---------------- */
+
+function mostrarForma() {
+  const tem = !!escolhida;
+  $('semForma').hidden = tem;
+  for (const id of ['altura', 'base', 'furo', 'btFrente', 'btApagar']) $(id).disabled = !tem;
+  if (!tem) return;
+  $('altura').value = escolhida.altura; $('base').value = escolhida.base;
+  $('furo').checked = escolhida.furo;
+  cor = escolhida.cor; marcarCor(); rotulos();
+}
+function rotulos() {
+  $('rAltura').textContent = `${vg(+$('altura').value)} mm`;
+  $('rBase').textContent = `${vg(+$('base').value)} mm`;
+  $('rTraco').textContent = `${vg(+$('traco').value)} mm`;
+  $('rLado').textContent = `${$('lado').value} mm`;
+}
+for (const id of ['altura', 'base', 'furo']) $(id).addEventListener('input', () => {
+  if (!escolhida) return;
+  escolhida.altura = +$('altura').value;
+  escolhida.base = +$('base').value;
+  escolhida.furo = $('furo').checked;
+  rotulos(); pintar(); agendar();
+});
+for (const id of ['altura', 'base', 'furo']) $(id).addEventListener('change', guardar);
+$('traco').addEventListener('input', () => {
+  rotulos();
+  if (escolhida && !escolhida.fechado) { escolhida.traco = +$('traco').value; pintar(); agendar(); }
+});
+$('lado').addEventListener('input', () => { rotulos(); agendar(); });
+$('btApagar').onclick = () => {
+  if (!escolhida) return;
+  formas = formas.filter((f) => f !== escolhida); escolhida = null;
+  mostrarForma(); guardar(); pintar(); agendar();
+};
+$('btFrente').onclick = () => {
+  if (!escolhida) return;
+  formas = formas.filter((f) => f !== escolhida).concat([escolhida]);
+  guardar(); pintar(); agendar();
+};
+$('espelho').addEventListener('change', () => {
+  if (escolhida) { escolhida.espelho = $('espelho').checked ? eixoEspelho() : null; guardar(); }
+  pintar(); agendar();
+});
+$('rabisco').addEventListener('change', () => {
+  if (!$('rabisco').checked) return;
+  for (const f of formas) aplicarRabisco(f);
+  guardar(); mostrarForma(); agendar();
+});
+$('btDesfazer').onclick = () => voltar(-1);
+$('btRefazer').onclick = () => voltar(1);
+$('btLimpar').onclick = () => { formas = []; escolhida = null; guardar(); mostrarForma(); pintar(); agendar(); };
+
+/* ---------------- texto e imagem viram formas ---------------- */
+
+/**
+ * Texto e imagem não são tipos especiais: viram forma vetorial comum, com furo
+ * interno onde precisa (o miolo do "o"). Assim tudo depois — mover, altura,
+ * furo, espelho — funciona igual, sem caso à parte.
+ */
+function contornosDeMascara(cv, mmPorPx, x0, y0) {
+  const c = cv.getContext('2d', { willReadFrequently: true });
+  const d = c.getImageData(0, 0, cv.width, cv.height).data;
+  const m = [];
+  for (let j = 0; j < cv.height; j++) {
+    const l = new Uint8Array(cv.width);
+    for (let i = 0; i < cv.width; i++) l[i] = d[(j * cv.width + i) * 4 + 3] > 128 ? 1 : 0;
+    m.push(l);
+  }
+  return contornos(borrar(m, 1))
+    .map((l) => decimar(suavizarLinha(l, 2), 0.4))
+    .filter((l) => l.length > 8)
+    .map((l) => l.map(([x, y]) => [x0 + x * mmPorPx, y0 + y * mmPorPx]));
+}
+
+function juntarEmFormas(laços) {
+  // laço dentro de outro é furo do de fora, não peça nova
+  const area = laços.map((l) => Math.abs(areaComSinal(l)));
+  const ordem = laços.map((_, i) => i).sort((a, b) => area[b] - area[a]);
+  const usados = new Set(), saida = [];
+  for (const i of ordem) {
+    if (usados.has(i)) continue;
+    usados.add(i);
+    const furosDele = [];
+    for (const j of ordem) {
+      if (usados.has(j)) continue;
+      if (dentroDo(laços[j][0], laços[i])) { usados.add(j); furosDele.push(laços[j]); }
+    }
+    saida.push({ pontos: laços[i], furosInternos: furosDele.length ? furosDele : null });
+  }
+  return saida;
+}
+
+function novasFormas(pedacos) {
+  for (const p of pedacos) {
+    const f = { id: proximoId++, ...p, fechado: true, traco: 0, cor,
+      altura: +$('altura').value, base: +$('base').value, furo: false,
+      espelho: $('espelho').checked ? eixoEspelho() : null };
+    if ($('rabisco').checked) aplicarRabisco(f);
+    formas.push(f);
+  }
+  guardar(); enquadrar(); agendar();
+}
+
+$('btTexto').onclick = () => {
+  const txt = prompt('Que palavra você quer em 3D?');
+  if (!txt) return;
+  const tam = 200;
+  const cv = document.createElement('canvas');
+  const c = cv.getContext('2d');
+  c.font = `700 ${tam}px -apple-system, "Segoe UI", sans-serif`;
+  const larg = Math.ceil(c.measureText(txt).width) + 40;
+  cv.width = larg; cv.height = Math.ceil(tam * 1.5);
+  const c2 = cv.getContext('2d');
+  c2.font = `700 ${tam}px -apple-system, "Segoe UI", sans-serif`;
+  c2.textBaseline = 'middle';
+  c2.fillStyle = '#fff'; c2.fillText(txt, 20, cv.height / 2);
+  const mmPorPx = 60 / tam;
+  novasFormas(juntarEmFormas(contornosDeMascara(cv, mmPorPx, 0, 0)));
+};
+
+$('btImagem').onclick = () => $('arquivo').click();
+$('arquivo').onchange = (e) => carregarImagem(e.target.files[0]);
+document.addEventListener('drop', (e) => { e.preventDefault();
+  const f = e.dataTransfer.files[0]; if (f) carregarImagem(f); });
+document.addEventListener('dragover', (e) => e.preventDefault());
+
+async function carregarImagem(arq) {
+  if (!arq || !arq.type.startsWith('image/')) return;
+  const im = await createImageBitmap(arq);
+  const n = 460;
+  const esc = n / Math.max(im.width, im.height);
+  const C = Math.round(im.width * esc), L = Math.round(im.height * esc);
+  const cv = document.createElement('canvas');
+  cv.width = C; cv.height = L;
+  const c = cv.getContext('2d', { willReadFrequently: true });
+  c.drawImage(im, 0, 0, C, L);
+  const d = c.getImageData(0, 0, C, L);
+  // fundo é a cor das bordas; o que não é fundo vira figura. Mesmo critério do
+  // cortador, que é onde ele foi testado.
+  let r = 0, g = 0, b = 0, n2 = 0;
+  const soma = (i, j) => { const k = (j * C + i) * 4; r += d.data[k]; g += d.data[k+1]; b += d.data[k+2]; n2++; };
+  for (let i = 0; i < C; i++) { soma(i, 0); soma(i, L - 1); }
+  for (let j = 0; j < L; j++) { soma(0, j); soma(C - 1, j); }
+  r /= n2; g /= n2; b /= n2;
+  for (let k = 0; k < C * L; k++) {
+    const p = k * 4;
+    const perto = Math.hypot(d.data[p] - r, d.data[p+1] - g, d.data[p+2] - b) < 90;
+    d.data[p + 3] = (perto || d.data[p + 3] < 128) ? 0 : 255;
+  }
+  c.putImageData(d, 0, 0);
+  const mmPorPx = 70 / Math.max(C, L);
+  novasFormas(juntarEmFormas(contornosDeMascara(cv, mmPorPx, 0, 0)));
+}
+
+/* ---------------- atalhos ---------------- */
+
+let copiado = null;
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  const cmd = e.metaKey || e.ctrlKey;
+  if (cmd && e.key.toLowerCase() === 'z') { e.preventDefault(); voltar(e.shiftKey ? 1 : -1); return; }
+  if (cmd && e.key.toLowerCase() === 'y') { e.preventDefault(); voltar(1); return; }
+  if (cmd && e.key.toLowerCase() === 'c' && escolhida) { copiado = JSON.stringify(escolhida); return; }
+  if (cmd && e.key.toLowerCase() === 'v' && copiado) {
+    const f = JSON.parse(copiado);
+    f.id = proximoId++;
+    f.pontos = f.pontos.map(([x, y]) => [x + 5, y + 5]);
+    if (f.furosInternos) f.furosInternos = f.furosInternos.map((h) => h.map(([x, y]) => [x + 5, y + 5]));
+    formas.push(f); escolhida = f; mostrarForma(); guardar(); pintar(); agendar(); return;
+  }
+  if ((e.key === 'Backspace' || e.key === 'Delete') && escolhida) { e.preventDefault(); $('btApagar').click(); return; }
+  const passo = e.shiftKey ? 5 : 1;
+  const mexer = { ArrowLeft: [-passo, 0], ArrowRight: [passo, 0], ArrowUp: [0, -passo], ArrowDown: [0, passo] }[e.key];
+  if (mexer && escolhida) {
+    e.preventDefault();
+    escolhida.pontos = escolhida.pontos.map(([x, y]) => [x + mexer[0], y + mexer[1]]);
+    if (escolhida.furosInternos) escolhida.furosInternos =
+      escolhida.furosInternos.map((h) => h.map(([x, y]) => [x + mexer[0], y + mexer[1]]));
+    pintar(); agendar();
+  }
+});
+
+/* ---------------- montar a peça ---------------- */
+
+const visor = criarVisor($('visor'), { enquadrar: true, fov: 0.62 });
+let ultimo = null, pendente = null;
+
+function agendar() {
+  clearTimeout(pendente);
+  pendente = setTimeout(calcular, 160);
+}
+
+function escala() {
+  const cx = limites(formas, 0);
+  if (!cx) return 1;
+  const maior = Math.max(cx.x1 - cx.x0, cx.y1 - cx.y0);
+  return maior > 0 ? +$('lado').value / maior : 1;
+}
+
+function calcular() {
+  $('dFormas').textContent = formas.length;
+  if (!formas.length) { ultimo = null; $('btBaixar').disabled = true;
+    $('dMedida').textContent = $('dPeso').textContent = $('dArquivo').textContent = '—';
+    $('aviso').textContent = ''; visor.enviar([]); visor.desenhar(); return; }
+
+  // o desenho é redimensionado pra caber no maior lado pedido
+  const k = escala();
+  const emEscala = formas.map((f) => ({ ...f,
+    pontos: f.pontos.map(([x, y]) => [x * k, y * k]),
+    furosInternos: f.furosInternos ? f.furosInternos.map((h) => h.map(([x, y]) => [x * k, y * k])) : null,
+    espelho: f.espelho != null ? f.espelho * k : null,
+    traco: f.traco * k }));
+
+  const mmPorCelula = Math.max(0.12, +$('lado').value / 900);
+  const r = montar(emEscala, { mmPorCelula });
+  ultimo = r.tris.length ? r : null;
+  $('btBaixar').disabled = !ultimo;
+  if (!ultimo) { $('aviso').textContent = 'Nenhuma forma com altura ainda.'; visor.enviar([]); visor.desenhar(); return; }
+
+  visor.enviar(r.tris); visor.desenhar();
+  $('dMedida').textContent = `${Math.round(r.largura)} × ${Math.round(r.profundidade)} × ${vg(r.altura)} mm`;
+  $('dPeso').textContent = `~${vg(r.volume * 1.24, 1)} g`;
+  $('dArquivo').textContent = `${(r.tris.length * 50 / 1e6).toFixed(1)} MB`;
+
+  const avisos = [];
+  if (r.pecas > 1) avisos.push(`Saem ${r.pecas} pedaços soltos — encoste as formas se quiser peça inteira.`);
+  const fino = formas.some((f) => !f.fechado && f.traco * k < 0.8);
+  if (fino) avisos.push('Tem traço abaixo de 0,8 mm: fino demais pra imprimir com bico de 0,4.');
+  $('aviso').textContent = avisos.join(' ');
+}
+
+$('btBaixar').onclick = () => {
+  if (!ultimo) return;
+  const blob = new Blob([escreverStl(ultimo.tris)], { type: 'model/stl' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'desenho-3d.stl'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+};
+
+/* ---------------- começo ---------------- */
+ferramenta = 'livre'; marcarFerramenta(); marcarCor(); rotulos(); mostrarForma();
+guardar(); ajustarTela(); enquadrar();
+window.__modelador = { formas: () => formas, calcular, montarAgora: () => ultimo,
+                       carregarImagem, novasFormas, juntarEmFormas, ferramenta: (f) => { ferramenta = f; marcarFerramenta(); } };
+</script>
+</body>
+</html>

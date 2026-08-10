@@ -80,11 +80,11 @@
   /* ---- cartões dos aplicativos ---- */
   /* Cinco colunas, porque são cinco aplicativos. Com a grade fixa em quatro que
      havia aqui, o quinto cartão ficava sozinho numa linha inteira. */
-  .apps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-top: 40px; }
-  @media (max-width: 1080px) { .apps { grid-template-columns: repeat(3, 1fr); } }
+  .apps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 40px; }
+  @media (max-width: 1080px) { .apps { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 760px) { .apps { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 520px) { .apps { grid-template-columns: 1fr; } }
-  @media (min-width: 1081px) { .app .foto { height: 140px; padding: 10px; } }
+
   .app { background: var(--branco); border: 1px solid var(--linha); border-radius: 16px;
          overflow: hidden; display: flex; flex-direction: column; transition: box-shadow .18s, transform .18s; }
   .app:hover { box-shadow: 0 12px 34px rgba(20, 22, 26, .09); transform: translateY(-3px); }
@@ -169,7 +169,7 @@
 
 <section class="placar">
   <div class="dentro">
-    <div><b>5</b><span>aplicativos prontos pra usar</span></div>
+    <div><b>6</b><span>aplicativos prontos pra usar</span></div>
     <div><b>Sem instalar</b><span>tudo roda no seu navegador</span></div>
     <div><b>Sem assinatura</b><span>baixe o arquivo e imprima</span></div>
   </div>
@@ -213,6 +213,15 @@
           <h3>Lápis com Nome</h3>
           <p>O nome da criança em letras gordas, com contorno de duas cores.</p>
           <a class="bt cheio" href="texto.html">Criar</a>
+        </div>
+      </div>
+      <div class="app">
+        <div class="foto"><img src="img/modelador.png" alt="Desenho virando peça em 3D"></div>
+        <div class="txt">
+          <h3>Desenhar em 3D</h3>
+          <p>Rabisque de um lado e a peça nasce do outro. Junte formas, abra furos e
+            baixe o STL, sem saber modelar.</p>
+          <a class="bt cheio" href="modelador.html">Criar</a>
         </div>
       </div>
       <div class="app">
@@ -320,7 +329,7 @@
 <section class="chamada" id="contato">
   <div class="dentro">
     <h2>Comece pelo que é de graça.</h2>
-    <p class="conduz" style="max-width: 620px; margin: 0 auto;">Os cinco aplicativos estão no ar
+    <p class="conduz" style="max-width: 620px; margin: 0 auto;">Os seis aplicativos estão no ar
       e não pedem cadastro. Se o que você precisa não está lá, escreva pra gente.</p>
     <div class="botoes" style="justify-content: center;">
       <a class="bt dourado" href="#aplicativos">Ver os aplicativos</a>
@@ -343,6 +352,7 @@
         <a href="vaso.html">Vaso e Abajur</a>
         <a href="texto.html">Lápis com Nome</a>
         <a href="cortador.html">Cortador de Biscoito</a>
+        <a href="modelador.html">Desenhar em 3D</a>
       </div>
       <div>
         <h4>Serviços</h4>

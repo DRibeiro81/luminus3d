@@ -630,7 +630,7 @@ function costurarFuros(externo, furos) {
  * conta própria, e o laço de dentro — que é o furo — virava um pilar tapando o
  * miolo. Na prévia o furo aparecia (regra par-ímpar) e no 3D não.
  */
-function prisma(tris, linha, e, z0, z1, furos = []) {
+export function prisma(tris, linha, e, z0, z1, furos = []) {
   let p = linha.slice(0, -1);
   const n = p.length;
   if (n < 3) return;
