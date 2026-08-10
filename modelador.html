@@ -132,6 +132,36 @@
         <input type="range" id="base" min="0" max="60" step="0.5" value="0"></label>
       <div class="caixa"><input type="checkbox" id="furo">
         <span>É furo: corta o que estiver embaixo</span></div>
+      <label id="grPlano"><div class="rot"><span>Plano do desenho</span></div>
+        <select id="planoDesenho">
+          <option value="mesa">Deitado na mesa</option>
+          <option value="frente">Em pé, de frente</option>
+          <option value="lado">Em pé, de lado</option>
+        </select></label>
+
+      <div id="grPerfil">
+        <label><div class="rot"><span>Esculpir: embaixo</span><span id="rEsc0">100%</span></div>
+          <input type="range" id="esc0" min="5" max="250" step="5" value="100"></label>
+        <label><div class="rot"><span>no meio</span><span id="rEsc1">100%</span></div>
+          <input type="range" id="esc1" min="5" max="250" step="5" value="100"></label>
+        <label><div class="rot"><span>em cima</span><span id="rEsc2">100%</span></div>
+          <input type="range" id="esc2" min="5" max="250" step="5" value="100"></label>
+        <label><div class="rot"><span>Torcer</span><span id="rTorcao">0°</span></div>
+          <input type="range" id="torcao" min="-360" max="360" step="5" value="0"></label>
+      </div>
+
+      <div class="caixa" id="grRevolver"><input type="checkbox" id="revolver">
+        <span>Revolver: roda o desenho como num torno</span></div>
+      <label id="grVoltas" hidden><div class="rot"><span>Quanto da volta</span><span id="rVoltas">100%</span></div>
+        <input type="range" id="voltas" min="10" max="100" step="5" value="100"></label>
+
+      <div id="grPrim" hidden>
+        <label><div class="rot"><span>Raio</span><span id="rRaio">10 mm</span></div>
+          <input type="range" id="raio" min="2" max="60" step="1" value="10"></label>
+        <label id="grRaio2" hidden><div class="rot"><span>Raio do caminho</span><span id="rRaio2">20 mm</span></div>
+          <input type="range" id="raio2" min="4" max="80" step="1" value="20"></label>
+      </div>
+
       <div class="linhaBotoes">
         <button class="leve" id="btFrente">Trazer pra frente</button>
         <button class="leve" id="btApagar">Apagar</button>
@@ -201,7 +231,8 @@
 </main>
 
 <script type="module">
-import { montar, retangulo, elipse, estrela, arco, limites, espelharPontos } from './modelador.js';
+import { montar, retangulo, elipse, estrela, arco, limites, espelharPontos,
+         escalaEm } from './modelador.js';
 import { contornos, suavizarLinha, decimar, areaComSinal, borrar } from './cortador.js';
 import { escreverStl } from './geometria.js';
 import { criarVisor } from './visor3d.js';
@@ -261,6 +292,10 @@ const FERRAMENTAS = [
   { id: 'estrela',   nome: 'Estrela',  svg: '<path d="M11 3l2.4 5.2 5.6.7-4.2 3.9 1.1 5.6L11 15.7 6.1 18.4l1.1-5.6L3 8.9l5.6-.7z"/>' },
   { id: 'pontos',    nome: 'Pontos',   svg: '<path d="M4 15c4 0 6-9 9-9s4 5 5 5"/><circle cx="4" cy="15" r="2"/><circle cx="13" cy="6" r="2"/><circle cx="18" cy="11" r="2"/>' },
   { id: 'borracha',  nome: 'Borracha', svg: '<path d="M8 18H4l-1-4 9-9 6 6-7 7z"/>' },
+  { id: 'gotas',     nome: 'Conta-gotas', svg: '<path d="M14 3l5 5-8 8-5 1 1-5z"/><path d="M4 19h6"/>' },
+  { id: 'esfera',    nome: 'Esfera',   svg: '<circle cx="11" cy="11" r="7"/><path d="M4 11c3 2 11 2 14 0"/>' },
+  { id: 'cone',      nome: 'Cone',     svg: '<path d="M11 3l7 14H4z"/><ellipse cx="11" cy="17" rx="7" ry="2"/>' },
+  { id: 'toro',      nome: 'Toro',     svg: '<ellipse cx="11" cy="11" rx="8" ry="5"/><ellipse cx="11" cy="11" rx="3" ry="1.8"/>' },
 ];
 
 $('paleta').innerHTML = FERRAMENTAS.map((f) =>
@@ -283,6 +318,10 @@ function marcarFerramenta() {
     estrela: 'Arraste do centro pra fora.',
     pontos: 'Arraste um ponto pra mexer. Clique no meio de um trecho pra criar ponto. Alt e clique apaga.',
     borracha: 'Clique na forma que quer apagar.',
+    gotas: 'Clique numa forma pra pegar a cor dela.',
+    esfera: 'Clique onde quer a bola.',
+    cone: 'Clique onde quer o cone.',
+    toro: 'Clique onde quer a rosquinha.',
   }[ferramenta];
   $('dicaFer').textContent = texto;
 }
@@ -507,6 +546,22 @@ tela.addEventListener('pointerdown', (e) => {
     }
     return;
   }
+  if (ferramenta === 'gotas') {
+    const f = acharForma(p);
+    if (f) { cor = f.cor; marcarCor(); }
+    return;
+  }
+  if (['esfera', 'cone', 'toro'].includes(ferramenta)) {
+    const nova = {
+      id: proximoId++, pontos: retangulo(p[0] - 1, p[1] - 1, 2, 2), fechado: true, traco: 0,
+      cor, base: 0, altura: +$('altura').value, furo: false, espelho: null,
+      primitiva: ferramenta, raio: ferramenta === 'cone' ? 25 : 10,
+      raioSecao: 10, raioCaminho: 20, segmentos: 32, plano: $('planoDesenho').value,
+    };
+    formas.push(nova); escolhida = nova; mostrarForma();
+    guardar(); pintar(); agendar();
+    return;
+  }
   if (ferramenta === 'borracha') {
     const f = acharForma(p);
     if (f) { formas = formas.filter((x) => x !== f); escolhida = null; guardar(); pintar(); agendar(); }
@@ -660,26 +715,65 @@ tela.addEventListener('wheel', (e) => {
 function mostrarForma() {
   const tem = !!escolhida;
   $('semForma').hidden = tem;
-  for (const id of ['altura', 'base', 'furo', 'btFrente', 'btApagar']) $(id).disabled = !tem;
+  for (const id of [...CAMPOS3D, 'btFrente', 'btApagar']) $(id).disabled = !tem;
   if (!tem) return;
   $('altura').value = escolhida.altura; $('base').value = escolhida.base;
   $('furo').checked = escolhida.furo;
+  $('planoDesenho').value = escolhida.plano || 'mesa';
+  const a = escolhida.alcas || [];
+  $('esc0').value = Math.round((escalaEm(a, 0) || 1) * 100);
+  $('esc1').value = Math.round((escalaEm(a, 0.5) || 1) * 100);
+  $('esc2').value = Math.round((escalaEm(a, 1) || 1) * 100);
+  $('torcao').value = Math.round((escolhida.torcao || 0) * 180 / Math.PI);
+  $('revolver').checked = !!escolhida.revolver;
+  $('voltas').value = Math.round((escolhida.voltas ?? 1) * 100);
+  $('raio').value = escolhida.raio || 10;
+  $('raio2').value = escolhida.raioCaminho || 20;
+  // mostra só o que faz sentido pra esta forma
+  const prim = !!escolhida.primitiva;
+  $('grPrim').hidden = !prim;
+  $('grRaio2').hidden = escolhida.primitiva !== 'toro';
+  $('grPerfil').hidden = prim || escolhida.revolver;
+  $('grRevolver').hidden = prim || !escolhida.fechado;
+  $('grVoltas').hidden = !escolhida.revolver;
   cor = escolhida.cor; marcarCor(); rotulos();
 }
 function rotulos() {
+  $('rEsc0').textContent = `${$('esc0').value}%`;
+  $('rEsc1').textContent = `${$('esc1').value}%`;
+  $('rEsc2').textContent = `${$('esc2').value}%`;
+  $('rTorcao').textContent = `${$('torcao').value}°`;
+  $('rVoltas').textContent = `${$('voltas').value}%`;
+  $('rRaio').textContent = `${$('raio').value} mm`;
+  $('rRaio2').textContent = `${$('raio2').value} mm`;
   $('rAltura').textContent = `${vg(+$('altura').value)} mm`;
   $('rBase').textContent = `${vg(+$('base').value)} mm`;
   $('rTraco').textContent = `${vg(+$('traco').value)} mm`;
   $('rLado').textContent = `${$('lado').value} mm`;
 }
-for (const id of ['altura', 'base', 'furo']) $(id).addEventListener('input', () => {
+const CAMPOS3D = ['altura', 'base', 'furo', 'planoDesenho', 'esc0', 'esc1', 'esc2',
+                  'torcao', 'revolver', 'voltas', 'raio', 'raio2'];
+for (const id of CAMPOS3D) $(id).addEventListener('input', () => {
   if (!escolhida) return;
   escolhida.altura = +$('altura').value;
   escolhida.base = +$('base').value;
   escolhida.furo = $('furo').checked;
+  escolhida.plano = $('planoDesenho').value;
+  const s0 = +$('esc0').value / 100, s1 = +$('esc1').value / 100, s2 = +$('esc2').value / 100;
+  // guarda as alças só quando alguma sai de 100%: assim a extrusão reta
+  // continua sendo reta, que é mais rápida e não perde precisão
+  escolhida.alcas = (s0 === 1 && s1 === 1 && s2 === 1)
+    ? null : [{ t: 0, s: s0 }, { t: 0.5, s: s1 }, { t: 1, s: s2 }];
+  escolhida.torcao = +$('torcao').value * Math.PI / 180;
+  escolhida.revolver = $('revolver').checked;
+  escolhida.voltas = +$('voltas').value / 100;
+  escolhida.raio = +$('raio').value;
+  escolhida.raioCaminho = +$('raio2').value;
+  $('grVoltas').hidden = !escolhida.revolver;
+  $('grPerfil').hidden = !!escolhida.primitiva || escolhida.revolver;
   rotulos(); pintar(); agendar();
 });
-for (const id of ['altura', 'base', 'furo']) $(id).addEventListener('change', guardar);
+for (const id of CAMPOS3D) $(id).addEventListener('change', guardar);
 $('traco').addEventListener('input', () => {
   rotulos();
   if (escolhida && !escolhida.fechado) { escolhida.traco = +$('traco').value; pintar(); agendar(); }
@@ -865,6 +959,8 @@ function calcular() {
   // o desenho é redimensionado pra caber no maior lado pedido
   const k = escala();
   const emEscala = formas.map((f) => ({ ...f,
+    raio: (f.raio || 0) * k, raioCaminho: (f.raioCaminho || 0) * k,
+    base: f.base, altura: f.altura,
     pontos: f.pontos.map(([x, y]) => [x * k, y * k]),
     furosInternos: f.furosInternos ? f.furosInternos.map((h) => h.map(([x, y]) => [x * k, y * k])) : null,
     espelho: f.espelho != null ? f.espelho * k : null,

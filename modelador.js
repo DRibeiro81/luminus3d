@@ -10,7 +10,7 @@
 // casca fechada vieram do cortador de biscoito, com suíte em cima.
 
 import { contornos, borrar, suavizarLinha, decimar, agruparFuros, prisma,
-         preencherPoligono } from './cortador.js';
+         preencherPoligono, costurarFuros, triangular, areaComSinal } from './cortador.js';
 import { fechar, anexar, volume } from './geometria.js';
 
 /** '#4ec9b0' vira [0.31, 0.79, 0.69]. */
@@ -170,13 +170,17 @@ export function limites(formas, folga = 4) {
  * peça.
  */
 export function montar(formas, op) {
-  const cheias = formas.filter((f) => !f.furo && f.altura > 0);
-  const furos = formas.filter((f) => f.furo);
-  if (!cheias.length) return { tris: [], volume: 0, pecas: 0, vazio: true };
+  // As que não passam pela grade: primitiva tem malha própria, e revolvida sai
+  // do contorno rodando em volta do eixo.
+  const soltas = formas.filter((f) => f.primitiva || f.revolver);
+  const daGrade = formas.filter((f) => !f.primitiva && !f.revolver);
+  const cheias = daGrade.filter((f) => !f.furo && f.altura > 0);
+  const furos = daGrade.filter((f) => f.furo);
+  if (!cheias.length && !soltas.length) return { tris: [], volume: 0, pecas: 0, vazio: true };
 
   // folga só o suficiente pra o contorno não encostar na borda da grade; a
   // medida da peça sai da malha, não daqui
-  const cx = limites(formas, Math.max(1, op.mmPorCelula * 4));
+  const cx = limites(daGrade.length ? daGrade : formas, Math.max(1, op.mmPorCelula * 4));
   const e = op.mmPorCelula;
   const C = Math.max(8, Math.ceil((cx.x1 - cx.x0) / e));
   const L = Math.max(8, Math.ceil((cx.y1 - cx.y0) / e));
@@ -185,10 +189,16 @@ export function montar(formas, op) {
   // Agrupa por faixa de altura E por cor. A cor entra na chave porque cada
   // sólido sai de uma cor só: é o que permite mostrar a peça colorida no 3D e,
   // na impressão, saber onde trocar de filamento.
+  // Esculpir e torcer são de CADA forma, então quem tem perfil não pode se
+  // juntar com outra na mesma passada — a assinatura entra na chave.
+  const assinatura = (f) => `${f.base}|${f.altura}|${f.cor || ''}|${f.plano || 'mesa'}|` +
+    `${JSON.stringify(f.alcas || null)}|${f.torcao || 0}|${f.id ?? ''}`.replace(/\|$/, '');
   const faixas = new Map();
   for (const f of cheias) {
-    const k = `${f.base}|${f.altura}|${f.cor || ''}`;
-    if (!faixas.has(k)) faixas.set(k, { base: f.base, altura: f.altura, cor: f.cor, formas: [] });
+    const temPerfil = (f.alcas && f.alcas.length) || f.torcao;
+    const k = temPerfil ? assinatura(f) : `${f.base}|${f.altura}|${f.cor || ''}|${f.plano || 'mesa'}`;
+    if (!faixas.has(k)) faixas.set(k, { base: f.base, altura: f.altura, cor: f.cor,
+      plano: f.plano, alcas: temPerfil ? f.alcas : null, torcao: temPerfil ? f.torcao : 0, formas: [] });
     faixas.get(k).formas.push(f);
   }
 
@@ -210,15 +220,37 @@ export function montar(formas, op) {
     const rgb = corParaRgb(faixa.cor);
     for (const g of agruparFuros(laços)) {
       const t = [];
-      prisma(t, g.externo, e, z0, z1, g.furos);
-      const fechados = fechar(t);
+      extrudarPerfil(t, g.externo, g.furos, e, z0, z1,
+                     { alcas: faixa.alcas, torcao: faixa.torcao });
+      let fechados = fechar(t);
+      // volta pro lugar ANTES de girar pro plano, senão a peça gira em torno da
+      // origem da grade e some da mesa
+      fechados = fechados.map((q) => q.map(([x, y, z]) => [x + cx.x0, y + cx.y0, z]));
+      fechados = paraOPlano(fechados, faixa.plano);
       anexar(tris, fechados);
       for (let k = 0; k < fechados.length; k++) cores.push(rgb);
       pecas++;
     }
   }
-  // volta pro lugar: a grade nasce na origem da caixa
-  const saida = tris.map((t) => t.map(([x, y, z]) => [x + cx.x0, y + cx.y0, z]));
+  // as soltas entram já no lugar delas
+  for (const f of soltas) {
+    const rgb = corParaRgb(f.cor);
+    let t = [];
+    if (f.primitiva) {
+      const c = centroDe(f.pontos);
+      t = primitiva(f.primitiva, { ...f, x: c[0], y: c[1], z: f.base || 0 });
+    } else {
+      const eixo = f.eixo != null ? f.eixo : Math.min(...f.pontos.map((q) => q[0])) - 1;
+      revolverContorno(t, [...f.pontos, f.pontos[0]], 1, eixo, f.voltas || 1, f.segmentos || 48);
+      t = fechar(t);
+    }
+    t = paraOPlano(t, f.plano);
+    anexar(tris, t);
+    for (let k = 0; k < t.length; k++) cores.push(rgb);
+    pecas++;
+  }
+
+  const saida = tris;
   // medida vinda da MALHA. Tirar da caixa das formas contava a folga da grade
   // junto, e a peça aparecia 8 mm maior do que o pedido.
   let x0 = Infinity, y0 = Infinity, z0m = Infinity, x1 = -Infinity, y1 = -Infinity, z1m = -Infinity;
@@ -229,4 +261,197 @@ export function montar(formas, op) {
   }
   return { tris: saida, cores, volume: volume(saida) / 1000, pecas,
            largura: x1 - x0, profundidade: y1 - y0, altura: z1m - z0m };
+}
+
+/* ================================================================
+   Extrusão com perfil: esculpir, torcer, revolver e primitivas
+   ================================================================ */
+
+/** Centro da caixa do contorno, que é em volta de quem a escala e a torção giram. */
+function centroDe(l) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, y] of l) {
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  return [(x0 + x1) / 2, (y0 + y1) / 2];
+}
+
+/** Escala num ponto da altura, interpolando entre as alças. */
+export function escalaEm(alcas, t) {
+  if (!alcas || alcas.length < 2) return 1;
+  const a = [...alcas].sort((p, q) => p.t - q.t);
+  if (t <= a[0].t) return a[0].s;
+  for (let i = 0; i + 1 < a.length; i++) {
+    if (t <= a[i + 1].t) {
+      const f = (t - a[i].t) / Math.max(1e-9, a[i + 1].t - a[i].t);
+      return a[i].s + (a[i + 1].s - a[i].s) * f;
+    }
+  }
+  return a[a.length - 1].s;
+}
+
+/**
+ * Extrusão com perfil: em vez de subir reto, cada fatia pode ser mais estreita
+ * ou mais larga (esculpir) e girar um tanto (torcer).
+ *
+ * A base fica parada e cada camada acima gira um pouco mais — é isso que faz o
+ * efeito de espiral. A escala nunca chega a zero: fechar num ponto deixa a
+ * malha degenerada, e o fatiador não sabe o que fazer com triângulo de área
+ * nenhuma.
+ */
+export function extrudarPerfil(tris, externo, furos, e, z0, z1, op = {}) {
+  const alcas = op.alcas, torcao = op.torcao || 0;
+  const reto = (!alcas || alcas.every((a) => Math.abs(a.s - 1) < 1e-6)) && Math.abs(torcao) < 1e-6;
+  if (reto) { prisma(tris, externo, e, z0, z1, furos); return; }
+
+  const c = centroDe(externo);
+  // Fatias só na conta do que a peça precisa: uma a cada 1,2 mm de altura, e
+  // mais se a torção for grande (uns 22° por fatia). Em 0,4 mm uma estrela de
+  // 18 mm saía com 174 mil triângulos e 8,7 MB de arquivo.
+  const fatias = Math.max(2, Math.min(36,
+    Math.ceil(Math.max((z1 - z0) / 1.2, Math.abs(torcao) * 8 / Math.PI))));
+  const arrumar = (l) => {
+    let p = l.slice(0, -1);
+    if (areaComSinal([...p, p[0]]) < 0) p = p.slice().reverse();
+    return p;
+  };
+  // O contorno vem da grade com um ponto a cada célula. Numa extrusão reta isso
+  // não pesa (a parede é um anel só), mas com perfil cada ponto vira uma fita de
+  // triângulos por fatia — então aqui ele é simplificado antes.
+  const enxugar = (l) => decimar(suavizarLinha(l, 1), 1.2);
+  const externoOk = arrumar(enxugar(externo));
+  const furosOk = (furos || []).map((f0) => { const f = enxugar(f0);
+    let p = f.slice(0, -1);
+    if (areaComSinal([...p, p[0]]) > 0) p = p.slice().reverse();
+    return p;
+  });
+
+  const naAltura = (l, k) => {
+    const t = k / fatias;
+    const s = Math.max(0.02, escalaEm(alcas, t));
+    const a = torcao * t;
+    const co = Math.cos(a), se = Math.sin(a);
+    return l.map(([x, y]) => {
+      const dx = (x - c[0]) * s, dy = (y - c[1]) * s;
+      return [c[0] + dx * co - dy * se, c[1] + dx * se + dy * co];
+    });
+  };
+  const z = (k) => z0 + (z1 - z0) * (k / fatias);
+
+  // paredes, anel por anel
+  const parede = (linha, viraAoContrario) => {
+    let a = naAltura(linha, 0);
+    for (let k = 1; k <= fatias; k++) {
+      const b = naAltura(linha, k);
+      const za = z(k - 1), zb = z(k);
+      for (let i = 0; i < linha.length; i++) {
+        const j = (i + 1) % linha.length;
+        const A = [a[i][0] * e, a[i][1] * e, za], B = [a[j][0] * e, a[j][1] * e, za];
+        const C = [b[j][0] * e, b[j][1] * e, zb], D = [b[i][0] * e, b[i][1] * e, zb];
+        if (viraAoContrario) tris.push([A, D, C], [A, C, B]);
+        else tris.push([A, B, C], [A, C, D]);
+      }
+      a = b;
+    }
+  };
+  parede(externoOk, false);
+  for (const f of furosOk) parede(f, true);
+
+  // tampas: a de baixo virada pra baixo, a de cima pra cima
+  for (const [k, cima] of [[0, false], [fatias, true]]) {
+    const ext = naAltura(externoOk, k);
+    const fur = furosOk.map((f) => naAltura(f, k));
+    const tampa = fur.length
+      ? costurarFuros([...ext, ext[0]], fur.map((f) => [...f, f[0]]))
+      : [...ext, ext[0]];
+    for (const [a, b, cc] of triangular(tampa)) {
+      const A = [a[0] * e, a[1] * e, z(k)], B = [b[0] * e, b[1] * e, z(k)], C = [cc[0] * e, cc[1] * e, z(k)];
+      tris.push(cima ? [A, B, C] : [A, C, B]);
+    }
+  }
+}
+
+/**
+ * Roda o contorno em volta de um eixo vertical, como torno.
+ *
+ * O perfil é o contorno em 2D: x vira o raio e y vira a altura. Perfil que
+ * cruza o eixo dobra a peça sobre si mesma, então o que estiver do lado
+ * errado é encostado no eixo.
+ */
+export function revolverContorno(tris, contorno, e, eixoX, voltas = 1, segmentos = 48) {
+  const p = contorno.slice(0, -1);
+  const n = p.length;
+  if (n < 3) return;
+  const ang = Math.PI * 2 * Math.max(0.02, Math.min(1, voltas));
+  const raio = (i) => Math.max(0, (p[i][0] - eixoX)) * e;
+  const alt = (i) => -p[i][1] * e;
+  const fechado = voltas >= 0.999;
+  const passos = Math.max(3, Math.round(segmentos * (fechado ? 1 : voltas)));
+  const V = (i, k) => {
+    const a = ang * (k / passos);
+    return [raio(i) * Math.cos(a), raio(i) * Math.sin(a), alt(i)];
+  };
+  for (let k = 0; k < passos; k++) {
+    const k2 = fechado ? (k + 1) % passos : k + 1;
+    if (!fechado && k2 > passos) break;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      tris.push([V(i, k), V(j, k), V(j, k2)], [V(i, k), V(j, k2), V(i, k2)]);
+    }
+  }
+  if (!fechado) {                       // tampa as duas pontas do arco
+    for (const k of [0, passos]) {
+      for (const [a, b, c] of triangular([...p, p[0]])) {
+        const g = (q) => { const an = ang * (k / passos);
+          const r = Math.max(0, q[0] - eixoX) * e;
+          return [r * Math.cos(an), r * Math.sin(an), -q[1] * e]; };
+        tris.push(k === 0 ? [g(a), g(b), g(c)] : [g(a), g(c), g(b)]);
+      }
+    }
+  }
+}
+
+/** Esfera, cone e toro: as três primitivas que o desenho 2D não dá. */
+export function primitiva(tipo, op) {
+  const t = [];
+  const s = op.segmentos || 32;
+  if (tipo === 'esfera') {
+    const r = op.raio || 10;
+    const P = (i, j) => { const u = i / s * Math.PI * 2, v = j / s * Math.PI;
+      return [r * Math.sin(v) * Math.cos(u), r * Math.sin(v) * Math.sin(u), r * Math.cos(v) + r]; };
+    // ordem invertida de propósito: com a de cima o volume saía NEGATIVO, que é
+    // a peça do avesso — o fatiador leria o dentro como fora
+    for (let j = 0; j < s; j++) for (let i = 0; i < s; i++)
+      t.push([P(i, j), P(i + 1, j + 1), P(i + 1, j)], [P(i, j), P(i, j + 1), P(i + 1, j + 1)]);
+  } else if (tipo === 'cone') {
+    const r = op.raio || 25, h = op.altura || 50;
+    const B = (i) => { const a = i / s * Math.PI * 2; return [r * Math.cos(a), r * Math.sin(a), 0]; };
+    for (let i = 0; i < s; i++) {
+      t.push([B(i), B(i + 1), [0, 0, h]]);
+      t.push([[0, 0, 0], B(i + 1), B(i)]);
+    }
+  } else if (tipo === 'toro') {
+    const rc = op.raioSecao || 10, rp = op.raioCaminho || 20;
+    const P = (i, j) => { const u = i / s * Math.PI * 2, v = j / s * Math.PI * 2;
+      return [(rp + rc * Math.cos(v)) * Math.cos(u), (rp + rc * Math.cos(v)) * Math.sin(u), rc * Math.sin(v) + rc]; };
+    for (let j = 0; j < s; j++) for (let i = 0; i < s; i++)
+      t.push([P(i, j), P(i + 1, j), P(i + 1, j + 1)], [P(i, j), P(i + 1, j + 1), P(i, j + 1)]);
+  }
+  const dx = op.x || 0, dy = op.y || 0, dz = op.z || 0;
+  return t.map((q) => q.map(([x, y, z]) => [x + dx, y + dy, z + dz]));
+}
+
+/**
+ * Gira a peça inteira pro plano em que ela foi desenhada.
+ *
+ * Tem que ser GIRO, não espelho. Na primeira versão eu usei (x,-z,-y) pra "em
+ * pé", que tem determinante −1: a peça saía do avesso, com volume negativo, e o
+ * fatiador leria o dentro como fora. As duas contas abaixo têm determinante +1.
+ */
+export function paraOPlano(tris, plano) {
+  if (!plano || plano === 'mesa') return tris;
+  if (plano === 'frente') return tris.map((t) => t.map(([x, y, z]) => [x, z, -y]));
+  if (plano === 'lado')   return tris.map((t) => t.map(([x, y, z]) => [-z, x, -y]));
+  return tris;
 }

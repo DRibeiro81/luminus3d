@@ -591,7 +591,7 @@ function semLacos(pontos) {
  * percorrer o furo no sentido contrário: vira um polígono só, com uma fenda de
  * largura zero, e o recortador não percebe a diferença.
  */
-function costurarFuros(externo, furos) {
+export function costurarFuros(externo, furos) {
   // Os sentidos de giro têm que ser CONTRÁRIOS: externo num, furo no outro.
   // Iguais, a ponte fecha em vez de abrir, e o recortador devolve um triângulo
   // só — foi o que aconteceu na primeira versão.
