@@ -151,6 +151,16 @@
     </div>
 
     <div class="etapa">
+      <p class="tit">Projetos</p>
+      <div class="linhaBotoes">
+        <button class="leve" id="btSalvar">Salvar</button>
+        <button class="leve" id="btAbrir">Abrir…</button>
+      </div>
+      <select id="listaProjetos" style="margin-top:8px" hidden></select>
+      <p class="dica" id="dicaProjeto">Fica guardado neste navegador, na sua máquina.</p>
+    </div>
+
+    <div class="etapa">
       <p class="tit">Tamanho da peça</p>
       <label><div class="rot"><span>Maior lado</span><span id="rLado">80 mm</span></div>
         <input type="range" id="lado" min="20" max="200" step="5" value="80"></label>
@@ -195,6 +205,7 @@ import { montar, retangulo, elipse, estrela, arco, limites, espelharPontos } fro
 import { contornos, suavizarLinha, decimar, areaComSinal, borrar } from './cortador.js';
 import { escreverStl } from './geometria.js';
 import { criarVisor } from './visor3d.js';
+import { salvar as guardarProjeto, listar, ler, apagar } from './banco.js';
 
 const $ = (id) => document.getElementById(id);
 const vg = (n, c = 1) => n.toFixed(c).replace('.', ',');
@@ -248,6 +259,7 @@ const FERRAMENTAS = [
   { id: 'retangulo', nome: 'Retângulo',svg: '<rect x="4" y="6" width="14" height="11" rx="1.5"/>' },
   { id: 'circulo',   nome: 'Círculo',  svg: '<circle cx="11" cy="11" r="7"/>' },
   { id: 'estrela',   nome: 'Estrela',  svg: '<path d="M11 3l2.4 5.2 5.6.7-4.2 3.9 1.1 5.6L11 15.7 6.1 18.4l1.1-5.6L3 8.9l5.6-.7z"/>' },
+  { id: 'pontos',    nome: 'Pontos',   svg: '<path d="M4 15c4 0 6-9 9-9s4 5 5 5"/><circle cx="4" cy="15" r="2"/><circle cx="13" cy="6" r="2"/><circle cx="18" cy="11" r="2"/>' },
   { id: 'borracha',  nome: 'Borracha', svg: '<path d="M8 18H4l-1-4 9-9 6 6-7 7z"/>' },
 ];
 
@@ -269,6 +281,7 @@ function marcarFerramenta() {
     retangulo: 'Arraste a diagonal.',
     circulo: 'Arraste do centro pra fora.',
     estrela: 'Arraste do centro pra fora.',
+    pontos: 'Arraste um ponto pra mexer. Clique no meio de um trecho pra criar ponto. Alt e clique apaga.',
     borracha: 'Clique na forma que quer apagar.',
   }[ferramenta];
   $('dicaFer').textContent = texto;
@@ -374,6 +387,31 @@ function pintar() {
     }
   }
 
+  // alças da forma escolhida: girar, redimensionar, e os pontos quando estiver
+  // no modo de ponto
+  if (escolhida) {
+    const c = caixaDa(escolhida);
+    if (ferramenta === 'pontos') {
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#14161a'; ctx.lineWidth = 1.5;
+      for (const p of escolhida.pontos) {
+        const [x, y] = paraTela(p);
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, 7); ctx.fill(); ctx.stroke();
+      }
+    } else if (ferramenta === 'seta') {
+      const a = paraTela([c.x0, c.y0]), b = paraTela([c.x1, c.y1]);
+      ctx.strokeStyle = '#5db7f0'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+      ctx.strokeRect(a[0], a[1], b[0] - a[0], b[1] - a[1]); ctx.setLineDash([]);
+      const alcas = alcasDe(c);
+      for (const [nome, p] of Object.entries(alcas)) {
+        const [x, y] = paraTela(p);
+        ctx.fillStyle = nome === 'girar' ? '#d9a441' : '#5db7f0';
+        ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill();
+      }
+      const g = paraTela(alcas.girar), t = paraTela([c.cx, c.y0]);
+      ctx.strokeStyle = '#d9a441'; ctx.beginPath(); ctx.moveTo(t[0], t[1]); ctx.lineTo(g[0], g[1]); ctx.stroke();
+    }
+  }
+
   if (previa) {
     ctx.strokeStyle = cor; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
     caminho(ctx, previa.pontos, previa.fechado); ctx.stroke(); ctx.setLineDash([]);
@@ -384,6 +422,34 @@ function pintar() {
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, r.height); ctx.stroke(); ctx.setLineDash([]);
   }
   $('solta').hidden = formas.length > 0;
+}
+
+/** Passa a mesma conta em todos os pontos da forma, inclusive nos furos dela. */
+function mapear(f, fn) {
+  f.pontos = f.pontos.map(fn);
+  if (f.furosInternos) f.furosInternos = f.furosInternos.map((h) => h.map(fn));
+}
+function caixaDa(f) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, y] of f.pontos) {
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  return { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+}
+function girar(f, ang, c) {
+  const co = Math.cos(ang), se = Math.sin(ang);
+  mapear(f, ([x, y]) => [c.cx + (x - c.cx) * co - (y - c.cy) * se,
+                         c.cy + (x - c.cx) * se + (y - c.cy) * co]);
+}
+function redimensionar(f, k, c) {
+  mapear(f, ([x, y]) => [c.cx + (x - c.cx) * k, c.cy + (y - c.cy) * k]);
+  if (!f.fechado) f.traco = Math.max(0.4, f.traco * k);
+}
+
+function alcasDe(c) {
+  const folga = 22 / vista.zoom;
+  return { tamanho: [c.x1, c.y1], girar: [c.cx, c.y0 - folga] };
 }
 
 function eixoEspelho() {
@@ -403,10 +469,43 @@ tela.addEventListener('pointerdown', (e) => {
   if (e.button === 1 || e.shiftKey) { arrastando = { tipo: 'mover-vista', de: p }; return; }
 
   if (ferramenta === 'seta') {
+    // alça primeiro: ela fica por cima da forma e não pode ser roubada por ela
+    if (escolhida) {
+      const c = caixaDa(escolhida), alcas = alcasDe(c);
+      const perto = 11 / vista.zoom;
+      for (const [nome, q] of Object.entries(alcas)) {
+        if (Math.hypot(p[0] - q[0], p[1] - q[1]) <= perto) {
+          arrastando = { tipo: nome, centro: c, de: p, alvo: escolhida,
+                         raio0: Math.hypot(p[0] - c.cx, p[1] - c.cy) || 1,
+                         ang0: Math.atan2(p[1] - c.cy, p[0] - c.cx) };
+          return;
+        }
+      }
+    }
     const f = acharForma(p);
     escolhida = f; mostrarForma();
     arrastando = f ? { tipo: 'mover-forma', de: p, alvo: f } : null;
     pintar(); return;
+  }
+  if (ferramenta === 'pontos') {
+    const f = escolhida && pertoDaForma(p, escolhida) ? escolhida : acharForma(p);
+    if (!f) { escolhida = null; mostrarForma(); pintar(); return; }
+    escolhida = f; mostrarForma();
+    const perto = 9 / vista.zoom;
+    const i = f.pontos.findIndex((q) => Math.hypot(p[0] - q[0], p[1] - q[1]) <= perto);
+    if (i >= 0) {
+      if (e.altKey && f.pontos.length > 3) { f.pontos.splice(i, 1); guardar(); pintar(); agendar(); return; }
+      arrastando = { tipo: 'ponto', alvo: f, indice: i };
+      pintar(); return;
+    }
+    // clicou no meio de um trecho: nasce um ponto ali
+    const onde = trechoMaisPerto(p, f);
+    if (onde >= 0) {
+      f.pontos.splice(onde + 1, 0, p);
+      arrastando = { tipo: 'ponto', alvo: f, indice: onde + 1 };
+      guardar(); pintar(); agendar();
+    }
+    return;
   }
   if (ferramenta === 'borracha') {
     const f = acharForma(p);
@@ -435,6 +534,22 @@ tela.addEventListener('pointermove', (e) => {
     arrastando.de = p; pintar(); agendar(); return;
   }
 
+  if (arrastando.tipo === 'ponto') {
+    arrastando.alvo.pontos[arrastando.indice] = p;
+    pintar(); agendar(); return;
+  }
+  if (arrastando.tipo === 'girar') {
+    const a = Math.atan2(p[1] - arrastando.centro.cy, p[0] - arrastando.centro.cx);
+    girar(arrastando.alvo, a - arrastando.ang0, arrastando.centro);
+    arrastando.ang0 = a; pintar(); agendar(); return;
+  }
+  if (arrastando.tipo === 'tamanho') {
+    const r = Math.hypot(p[0] - arrastando.centro.cx, p[1] - arrastando.centro.cy);
+    const k = Math.max(0.05, r / arrastando.raio0);
+    redimensionar(arrastando.alvo, k, arrastando.centro);
+    arrastando.raio0 = r; pintar(); agendar(); return;
+  }
+
   arrastando.pontos.push(p);
   previa = formaDoArrasto(arrastando.de, p, arrastando.pontos);
   pintar();
@@ -451,6 +566,7 @@ tela.addEventListener('pointerup', () => {
     formas.push(nova); escolhida = nova; mostrarForma();
     guardar(); agendar();
   }
+  if (arrastando && ['ponto', 'girar', 'tamanho', 'mover-forma'].includes(arrastando.tipo)) guardar();
   arrastando = null; previa = null; pintar();
 });
 
@@ -491,6 +607,24 @@ function acharForma(p) {
     }
   }
   return null;
+}
+function pertoDaForma(p, f) {
+  return f.fechado ? dentroDo(p, f.pontos) || pertoDaLinha(p, [...f.pontos, f.pontos[0]], 8 / vista.zoom)
+                   : pertoDaLinha(p, f.pontos, Math.max(f.traco, 8 / vista.zoom));
+}
+/** Índice do trecho mais próximo do clique, ou -1 se estiver longe de todos. */
+function trechoMaisPerto(p, f) {
+  const l = f.fechado ? [...f.pontos, f.pontos[0]] : f.pontos;
+  let melhor = -1, menor = 10 / vista.zoom;
+  for (let i = 0; i + 1 < l.length; i++) {
+    const [x0, y0] = l[i], [x1, y1] = l[i + 1];
+    const vx = x1 - x0, vy = y1 - y0, L2 = vx * vx + vy * vy;
+    let t = L2 ? ((p[0] - x0) * vx + (p[1] - y0) * vy) / L2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    const d = Math.hypot(p[0] - (x0 + t * vx), p[1] - (y0 + t * vy));
+    if (d < menor) { menor = d; melhor = i; }
+  }
+  return melhor;
 }
 function dentroDo(p, l) {
   let d = false;
@@ -707,6 +841,7 @@ document.addEventListener('keydown', (e) => {
 /* ---------------- montar a peça ---------------- */
 
 const visor = criarVisor($('visor'), { enquadrar: true, fov: 0.62 });
+visor.ajustar({ modo: 4 });          // cor por peça: a cor do desenho chega no 3D
 let ultimo = null, pendente = null;
 
 function agendar() {
@@ -741,7 +876,7 @@ function calcular() {
   $('btBaixar').disabled = !ultimo;
   if (!ultimo) { $('aviso').textContent = 'Nenhuma forma com altura ainda.'; visor.enviar([]); visor.desenhar(); return; }
 
-  visor.enviar(r.tris); visor.desenhar();
+  visor.enviar(r.tris, null, r.cores); visor.desenhar();
   $('dMedida').textContent = `${Math.round(r.largura)} × ${Math.round(r.profundidade)} × ${vg(r.altura)} mm`;
   $('dPeso').textContent = `~${vg(r.volume * 1.24, 1)} g`;
   $('dArquivo').textContent = `${(r.tris.length * 50 / 1e6).toFixed(1)} MB`;
@@ -761,10 +896,49 @@ $('btBaixar').onclick = () => {
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 };
 
+/* ---------------- projetos ---------------- */
+
+// Guardado no navegador de quem usa, igual à calculadora. O desenho é vetor
+// puro, então cabe em pouco espaço e volta editável — não é foto da peça.
+let projetoAberto = null;
+
+$('btSalvar').onclick = async () => {
+  if (!formas.length) return;
+  const nome = prompt('Nome do projeto:', projetoAberto?.nome || 'meu desenho');
+  if (!nome) return;
+  const id = await guardarProjeto({ id: projetoAberto?.id, nome, tipo: 'modelador',
+                                    formas, lado: +$('lado').value });
+  projetoAberto = { id, nome };
+  $('dicaProjeto').textContent = `Salvo como "${nome}".`;
+};
+
+$('btAbrir').onclick = async () => {
+  const todos = (await listar()).filter((p) => p.tipo === 'modelador');
+  const sel = $('listaProjetos');
+  if (!todos.length) { $('dicaProjeto').textContent = 'Nenhum projeto salvo ainda.'; return; }
+  sel.innerHTML = '<option value="">Escolha um projeto…</option>' + todos.map((p) =>
+    `<option value="${p.id}">${p.nome}</option>`).join('');
+  sel.hidden = false;
+};
+
+$('listaProjetos').onchange = async (e) => {
+  const id = +e.target.value;
+  if (!id) return;
+  const p = await ler(id);
+  if (!p) return;
+  formas = p.formas; escolhida = null;
+  proximoId = Math.max(1, ...formas.map((f) => f.id || 0)) + 1;
+  $('lado').value = p.lado || 80;
+  projetoAberto = { id: p.id, nome: p.nome };
+  $('dicaProjeto').textContent = `Aberto: "${p.nome}".`;
+  $('listaProjetos').hidden = true;
+  guardar(); rotulos(); mostrarForma(); enquadrar(); agendar();
+};
+
 /* ---------------- começo ---------------- */
 ferramenta = 'livre'; marcarFerramenta(); marcarCor(); rotulos(); mostrarForma();
 guardar(); ajustarTela(); enquadrar();
-window.__modelador = { formas: () => formas, calcular, montarAgora: () => ultimo,
+window.__modelador = { formas: () => formas, vista: () => vista, escolhida: () => escolhida, calcular, montarAgora: () => ultimo,
                        carregarImagem, novasFormas, juntarEmFormas, ferramenta: (f) => { ferramenta = f; marcarFerramenta(); } };
 </script>
 </body>

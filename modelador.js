@@ -13,6 +13,12 @@ import { contornos, borrar, suavizarLinha, decimar, agruparFuros, prisma,
          preencherPoligono } from './cortador.js';
 import { fechar, anexar, volume } from './geometria.js';
 
+/** '#4ec9b0' vira [0.31, 0.79, 0.69]. */
+export function corParaRgb(hex) {
+  const n = parseInt(String(hex || '#c9a05a').replace('#', ''), 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
+
 /** Grade vazia de C x L células. */
 function grade(C, L) {
   const m = [];
@@ -176,15 +182,17 @@ export function montar(formas, op) {
   const L = Math.max(8, Math.ceil((cx.y1 - cx.y0) / e));
   const gOp = { mmPorCelula: e, x0: cx.x0, y0: cx.y0 };
 
-  // agrupa por faixa de altura: quem começa e termina no mesmo lugar sai junto
+  // Agrupa por faixa de altura E por cor. A cor entra na chave porque cada
+  // sólido sai de uma cor só: é o que permite mostrar a peça colorida no 3D e,
+  // na impressão, saber onde trocar de filamento.
   const faixas = new Map();
   for (const f of cheias) {
-    const k = `${f.base}|${f.altura}`;
-    if (!faixas.has(k)) faixas.set(k, { base: f.base, altura: f.altura, formas: [] });
+    const k = `${f.base}|${f.altura}|${f.cor || ''}`;
+    if (!faixas.has(k)) faixas.set(k, { base: f.base, altura: f.altura, cor: f.cor, formas: [] });
     faixas.get(k).formas.push(f);
   }
 
-  const tris = [];
+  const tris = [], cores = [];
   let pecas = 0;
   for (const faixa of faixas.values()) {
     const m = grade(C, L);
@@ -199,10 +207,13 @@ export function montar(formas, op) {
     const laços = contornos(borrar(m, 1))
       .map((l) => decimar(suavizarLinha(l, 2), 0.6))
       .filter((l) => l.length > 8);
+    const rgb = corParaRgb(faixa.cor);
     for (const g of agruparFuros(laços)) {
       const t = [];
       prisma(t, g.externo, e, z0, z1, g.furos);
-      anexar(tris, fechar(t));
+      const fechados = fechar(t);
+      anexar(tris, fechados);
+      for (let k = 0; k < fechados.length; k++) cores.push(rgb);
       pecas++;
     }
   }
@@ -216,6 +227,6 @@ export function montar(formas, op) {
     if (y < y0) y0 = y; if (y > y1) y1 = y;
     if (z < z0m) z0m = z; if (z > z1m) z1m = z;
   }
-  return { tris: saida, volume: volume(saida) / 1000, pecas,
+  return { tris: saida, cores, volume: volume(saida) / 1000, pecas,
            largura: x1 - x0, profundidade: y1 - y0, altura: z1m - z0m };
 }

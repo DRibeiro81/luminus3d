@@ -12,18 +12,18 @@ export function criarVisor(canvas, opcoes = {}) {
   if (!gl) return { ok: false, enviar() {}, desenhar() {}, ajustar() {} };
 
   const vs = `
-    attribute vec3 pos; attribute vec3 nor; attribute float esp;
+    attribute vec3 pos; attribute vec3 nor; attribute float esp; attribute vec3 tinta;
     uniform mat4 mvp, mv;
-    varying vec3 vn, vp; varying float ve;
+    varying vec3 vn, vp, vt; varying float ve;
     void main() {
-      vn = mat3(mv) * nor; vp = (mv * vec4(pos, 1.0)).xyz; ve = esp;
+      vn = mat3(mv) * nor; vp = (mv * vec4(pos, 1.0)).xyz; ve = esp; vt = tinta;
       gl_Position = mvp * vec4(pos, 1.0);
     }`;
 
   const fs = `
     precision mediump float;
-    varying vec3 vn, vp; varying float ve;
-    uniform int modo;          // 0 sólido, 1 acesa, 2 apagada, 3 duas cores
+    varying vec3 vn, vp, vt; varying float ve;
+    uniform int modo;          // 0 sólido, 1 acesa, 2 apagada, 3 duas cores, 4 cor por peça
     uniform float espMin, espMax;
     void main() {
       vec3 n = normalize(vn);
@@ -41,6 +41,15 @@ export function criarVisor(canvas, opcoes = {}) {
         vec3 cor = base * (0.34 + 0.66 * d)
                  + vec3(0.10, 0.11, 0.14) * c
                  + vec3(0.12, 0.12, 0.12) * borda;
+        gl_FragColor = vec4(cor, 1.0);
+        return;
+      }
+
+      if (modo == 4) {
+        // mesma luz do sólido, com a cor que a peça carrega
+        vec3 cor = vt * (0.34 + 0.66 * d)
+                 + vec3(0.13, 0.16, 0.22) * c
+                 + vt * 0.22 * borda;
         gl_FragColor = vec4(cor, 1.0);
         return;
       }
@@ -81,6 +90,7 @@ export function criarVisor(canvas, opcoes = {}) {
   gl.enable(gl.DEPTH_TEST);
 
   const bufPos = gl.createBuffer(), bufNor = gl.createBuffer(), bufEsp = gl.createBuffer();
+  const bufTinta = gl.createBuffer();
   let nVerts = 0, alcance = 100, centro = [0, 0, 0], tamanho = [100, 100, 100];
   let modo = 0, espMin = 0, espMax = 1;
   // Giro inicial: o vaso abre num três-quartos; a litofania precisa nascer
@@ -117,11 +127,15 @@ export function criarVisor(canvas, opcoes = {}) {
    * fica lisa e a quina continua sendo quina.
    * `espessuras` é opcional — um valor por vértice, na ordem dos triângulos.
    */
-  function enviar(tris, espessuras) {
+  function enviar(tris, espessuras, tintas) {
     const n = tris.length;
     const pos = new Float32Array(n * 9);
     const nor = new Float32Array(n * 9);
     const esp = new Float32Array(n * 3);
+    // cor por TRIÂNGULO, repetida nos três vértices. Sem isso o modelador só
+    // sabia mostrar a peça inteira de uma cor, e o modo em que a cor manda na
+    // altura não tinha como ser conferido no 3D.
+    const tin = new Float32Array(n * 9);
     const faceN = new Float32Array(n * 3);
     let min = [1e9, 1e9, 1e9], max = [-1e9, -1e9, -1e9];
 
@@ -164,6 +178,7 @@ export function criarVisor(canvas, opcoes = {}) {
         pos[i] = p[0]; pos[i + 1] = p[1]; pos[i + 2] = p[2];
         nor[i] = mx; nor[i + 1] = my; nor[i + 2] = mz;
         esp[e] = espessuras ? espessuras[e] : 0;
+        if (tintas) { const c = tintas[t]; tin[i] = c[0]; tin[i + 1] = c[1]; tin[i + 2] = c[2]; }
         i += 3; e += 1;
       }
     }
@@ -178,6 +193,7 @@ export function criarVisor(canvas, opcoes = {}) {
     gl.bindBuffer(gl.ARRAY_BUFFER, bufPos); gl.bufferData(gl.ARRAY_BUFFER, pos, gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, bufNor); gl.bufferData(gl.ARRAY_BUFFER, nor, gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, bufEsp); gl.bufferData(gl.ARRAY_BUFFER, esp, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufTinta); gl.bufferData(gl.ARRAY_BUFFER, tin, gl.STATIC_DRAW);
   }
 
   function ajustar(cfg) {
@@ -227,7 +243,8 @@ export function criarVisor(canvas, opcoes = {}) {
     gl.uniform1f(gl.getUniformLocation(prog, 'espMin'), espMin);
     gl.uniform1f(gl.getUniformLocation(prog, 'espMax'), espMax);
 
-    for (const [nome, buf, tam] of [['pos', bufPos, 3], ['nor', bufNor, 3], ['esp', bufEsp, 1]]) {
+    for (const [nome, buf, tam] of [['pos', bufPos, 3], ['nor', bufNor, 3], ['esp', bufEsp, 1],
+                                    ['tinta', bufTinta, 3]]) {
       const loc = gl.getAttribLocation(prog, nome);
       if (loc < 0) continue;
       gl.bindBuffer(gl.ARRAY_BUFFER, buf);
