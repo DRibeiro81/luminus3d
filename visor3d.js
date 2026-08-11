@@ -203,7 +203,6 @@ export function criarVisor(canvas, opcoes = {}) {
   }
 
   function desenhar() {
-    if (!nVerts) return;
     const r = canvas.getBoundingClientRect();
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = Math.max(1, Math.round(r.width * dpr));
@@ -211,6 +210,10 @@ export function criarVisor(canvas, opcoes = {}) {
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(fundo[0], fundo[1], fundo[2], 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    // Limpa ANTES de desistir. Saindo antes disso, apagar tudo deixava o último
+    // quadro na tela pra sempre: o "limpar" limpava o desenho e a peça em 3D
+    // continuava lá.
+    if (!nVerts) return;
 
     // Enquadrar de verdade: a distância vem da largura E da altura da peça
     // contra a abertura da lente. Sem isso, peça comprida e baixa (um nome
