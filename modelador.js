@@ -455,3 +455,54 @@ export function paraOPlano(tris, plano) {
   if (plano === 'lado')   return tris.map((t) => t.map(([x, y, z]) => [-z, x, -y]));
   return tris;
 }
+
+/**
+ * Cada pedaço ligado da máscara vira UMA forma, com os furos dele.
+ *
+ * Tentei antes agrupar os laços por "quem está dentro de quem". Não se sustenta
+ * numa rede de traços: com 23 laços sobrou um vão de 41 mil células classificado
+ * como peça, e o desenho saiu invertido — o papel virava peça e o traço virava
+ * furo. Separando por pedaço ligado não há o que adivinhar: dentro de um pedaço,
+ * o laço maior é o contorno de fora e todo o resto é furo dele.
+ */
+export function formasDaMascara(m) {
+  const L = m.length, C = m[0].length;
+  const marca = new Int32Array(C * L).fill(-1);
+  const pilha = [];
+  const saida = [];
+  for (let p0 = 0; p0 < C * L; p0++) {
+    if (!m[(p0 / C) | 0][p0 % C] || marca[p0] >= 0) continue;
+    const id = saida.length;
+    let x0 = C, y0 = L, x1 = -1, y1 = -1;
+    const celulas = [];
+    marca[p0] = id; pilha.length = 0; pilha.push(p0);
+    while (pilha.length) {
+      const q = pilha.pop(), y = (q / C) | 0, x = q % C;
+      celulas.push(q);
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= C || ny >= L) continue;
+        const k = ny * C + nx;
+        if (m[ny][nx] && marca[k] < 0) { marca[k] = id; pilha.push(k); }
+      }
+    }
+    if (celulas.length < 12) { saida.push(null); continue; }
+
+    // recorte próprio, com uma folga pro contorno não encostar na borda
+    const w = x1 - x0 + 5, h = y1 - y0 + 5;
+    const sub = [];
+    for (let j = 0; j < h; j++) sub.push(new Uint8Array(w));
+    for (const q of celulas) sub[((q / C) | 0) - y0 + 2][(q % C) - x0 + 2] = 1;
+
+    const laços = contornos(borrar(sub, 1))
+      .map((l) => decimar(suavizarLinha(l, 2), 0.5))
+      .filter((l) => l.length >= 6)
+      .map((l) => l.map(([x, y]) => [x + x0 - 2, y + y0 - 2]));
+    if (!laços.length) { saida.push(null); continue; }
+    laços.sort((a, b) => Math.abs(areaComSinal(b)) - Math.abs(areaComSinal(a)));
+    saida.push({ pontos: laços[0], furosInternos: laços.length > 1 ? laços.slice(1) : null });
+  }
+  return saida.filter(Boolean);
+}

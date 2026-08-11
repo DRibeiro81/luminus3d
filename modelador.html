@@ -176,8 +176,14 @@
         <button class="leve" id="btTexto">Texto…</button>
       </div>
       <input type="file" id="arquivo" accept="image/*" hidden>
-      <p class="dica">Imagem entra pelo contorno dela: desenho de traço preto em fundo branco
-        é o que sai melhor. Foto não serve.</p>
+      <label style="margin-top:9px"><div class="rot"><span>O que trazer da imagem</span></div>
+        <select id="modoImagem">
+          <option value="tracos">Só os traços do desenho</option>
+          <option value="silhueta">A silhueta cheia</option>
+        </select></label>
+      <p class="dica">Em "só os traços" o desenho vira linha, do jeito que foi desenhado:
+        contorno sai como linha e mancha sai vazada, sem área chapada. A grossura é a do
+        traço lá em cima. Foto não serve.</p>
     </div>
 
     <div class="etapa">
@@ -232,8 +238,10 @@
 
 <script type="module">
 import { montar, retangulo, elipse, estrela, arco, limites, espelharPontos,
-         escalaEm } from './modelador.js';
-import { contornos, suavizarLinha, decimar, areaComSinal, borrar } from './cortador.js';
+         escalaEm, formasDaMascara } from './modelador.js';
+import { contornos, suavizarLinha, decimar, areaComSinal, borrar,
+         descolorir, tintaDoDesenho } from './cortador.js';
+import { engordar } from './texto.js';
 import { escreverStl } from './geometria.js';
 import { criarVisor } from './visor3d.js';
 import { salvar as guardarProjeto, listar, ler, apagar } from './banco.js';
@@ -404,17 +412,25 @@ function pintar() {
     if (f.espelho != null) listas.push(espelharPontos(f.pontos, f.espelho));
     for (const pts of listas) {
       if (pts.length < 2) continue;
-      caminho(ctx, pts, f.fechado);
       if (f.fechado) {
-        ctx.fillStyle = f.furo ? '#0f1114' : f.cor;
+        // O furo entra no MESMO caminho, e o par-ímpar deixa ele vazado. Pintar
+        // o furo por cima com a cor do fundo, que era como estava, tapava o que
+        // estivesse embaixo e fazia um desenho de traço parecer o contrário do
+        // que ele é.
+        ctx.beginPath();
+        const sub = (l) => { const q = l.map(paraTela);
+          ctx.moveTo(q[0][0], q[0][1]);
+          for (const w of q.slice(1)) ctx.lineTo(w[0], w[1]);
+          ctx.closePath(); };
+        sub(pts);
+        if (f.furosInternos) for (const h of f.furosInternos)
+          sub(f.espelho != null && pts !== f.pontos ? espelharPontos(h, f.espelho) : h);
+        ctx.fillStyle = f.furo ? '#232830' : f.cor;
         ctx.globalAlpha = f.furo ? 1 : 0.85;
         ctx.fill('evenodd');
         ctx.globalAlpha = 1;
-        if (f.furosInternos) for (const h of f.furosInternos) {
-          const hh = f.espelho != null && pts !== f.pontos ? espelharPontos(h, f.espelho) : h;
-          caminho(ctx, hh, true); ctx.fillStyle = '#0f1114'; ctx.fill();
-        }
       }
+      caminho(ctx, pts, f.fechado);
       ctx.strokeStyle = f.furo ? '#e0446a' : f.cor;
       ctx.lineWidth = Math.max(1, (f.fechado ? 1 / vista.zoom : f.traco) * vista.zoom);
       ctx.lineCap = ctx.lineJoin = 'round';
@@ -809,7 +825,8 @@ $('btLimpar').onclick = () => { formas = []; escolhida = null; guardar(); mostra
  * interno onde precisa (o miolo do "o"). Assim tudo depois — mover, altura,
  * furo, espelho — funciona igual, sem caso à parte.
  */
-function contornosDeMascara(cv, mmPorPx, x0, y0) {
+/** Tira a máscara de um canvas: opaco é figura. */
+function mascaraDoCanvas(cv) {
   const c = cv.getContext('2d', { willReadFrequently: true });
   const d = c.getImageData(0, 0, cv.width, cv.height).data;
   const m = [];
@@ -818,35 +835,28 @@ function contornosDeMascara(cv, mmPorPx, x0, y0) {
     for (let i = 0; i < cv.width; i++) l[i] = d[(j * cv.width + i) * 4 + 3] > 128 ? 1 : 0;
     m.push(l);
   }
-  return contornos(borrar(m, 1))
-    .map((l) => decimar(suavizarLinha(l, 2), 0.4))
-    .filter((l) => l.length > 8)
-    .map((l) => l.map(([x, y]) => [x0 + x * mmPorPx, y0 + y * mmPorPx]));
+  return m;
 }
 
-function juntarEmFormas(laços) {
-  // laço dentro de outro é furo do de fora, não peça nova
-  const area = laços.map((l) => Math.abs(areaComSinal(l)));
-  const ordem = laços.map((_, i) => i).sort((a, b) => area[b] - area[a]);
-  const usados = new Set(), saida = [];
-  for (const i of ordem) {
-    if (usados.has(i)) continue;
-    usados.add(i);
-    const furosDele = [];
-    for (const j of ordem) {
-      if (usados.has(j)) continue;
-      if (dentroDo(laços[j][0], laços[i])) { usados.add(j); furosDele.push(laços[j]); }
-    }
-    saida.push({ pontos: laços[i], furosInternos: furosDele.length ? furosDele : null });
-  }
-  return saida;
+/**
+ * Máscara vira formas vetoriais, e daí em diante é tudo igual: mover, altura,
+ * furo e espelho funcionam nelas como em qualquer outra.
+ */
+function novasFormasDaMascara(m, mmPorPx) {
+  const pedacos = formasDaMascara(m).map((f) => ({
+    pontos: f.pontos.map(([x, y]) => [x * mmPorPx, y * mmPorPx]),
+    furosInternos: f.furosInternos
+      ? f.furosInternos.map((h) => h.map(([x, y]) => [x * mmPorPx, y * mmPorPx])) : null,
+  }));
+  if (!pedacos.length) { $('aviso').textContent = 'Não achei desenho nenhum aí.'; return; }
+  novasFormas(pedacos);
 }
 
 function novasFormas(pedacos) {
   for (const p of pedacos) {
     const f = { id: proximoId++, ...p, fechado: true, traco: 0, cor,
       altura: +$('altura').value, base: +$('base').value, furo: false,
-      espelho: $('espelho').checked ? eixoEspelho() : null };
+      espelho: $('espelho').checked ? eixoEspelho() : null, plano: $('planoDesenho').value };
     if ($('rabisco').checked) aplicarRabisco(f);
     formas.push(f);
   }
@@ -860,14 +870,13 @@ $('btTexto').onclick = () => {
   const cv = document.createElement('canvas');
   const c = cv.getContext('2d');
   c.font = `700 ${tam}px -apple-system, "Segoe UI", sans-serif`;
-  const larg = Math.ceil(c.measureText(txt).width) + 40;
-  cv.width = larg; cv.height = Math.ceil(tam * 1.5);
+  cv.width = Math.ceil(c.measureText(txt).width) + 40;
+  cv.height = Math.ceil(tam * 1.5);
   const c2 = cv.getContext('2d');
   c2.font = `700 ${tam}px -apple-system, "Segoe UI", sans-serif`;
   c2.textBaseline = 'middle';
   c2.fillStyle = '#fff'; c2.fillText(txt, 20, cv.height / 2);
-  const mmPorPx = 60 / tam;
-  novasFormas(juntarEmFormas(contornosDeMascara(cv, mmPorPx, 0, 0)));
+  novasFormasDaMascara(mascaraDoCanvas(cv), 60 / tam);
 };
 
 $('btImagem').onclick = () => $('arquivo').click();
@@ -879,16 +888,52 @@ document.addEventListener('dragover', (e) => e.preventDefault());
 async function carregarImagem(arq) {
   if (!arq || !arq.type.startsWith('image/')) return;
   const im = await createImageBitmap(arq);
-  const n = 460;
+  const n = 500;
   const esc = n / Math.max(im.width, im.height);
   const C = Math.round(im.width * esc), L = Math.round(im.height * esc);
   const cv = document.createElement('canvas');
   cv.width = C; cv.height = L;
   const c = cv.getContext('2d', { willReadFrequently: true });
+  c.fillStyle = '#fff'; c.fillRect(0, 0, C, L);
   c.drawImage(im, 0, 0, C, L);
+  const mmPorPx = 70 / Math.max(C, L);
+  const m = $('modoImagem').value === 'tracos'
+    ? mascaraDosTraços(c.getImageData(0, 0, C, L).data, C, L, mmPorPx)
+    : mascaraDaSilhueta(c, C, L);
+  novasFormasDaMascara(m, mmPorPx);
+}
+
+/**
+ * Só os traços: o desenho vira linha, do jeito que foi desenhado.
+ *
+ * É a mesma conta do cortador de biscoito, e o motivo dela é o mesmo. Em arte de
+ * linha o traço preto é ele MESMO uma região, e região tem divisa dos dois lados
+ * — pegando divisa, todo contorno sai dobrado e bolinha vira donut. A separação
+ * certa é por espessura: região fina vira a linha de centro dela, região gorda
+ * vira o contorno vazado, e mancha pequena demais pra ter furo fica cheia.
+ */
+function mascaraDosTraços(dados, C, L, mmPorPx) {
+  const caneta = Math.max(1, +$('traco').value / mmPorPx);        // em pixels
+  // o que conta como traço acompanha o tamanho do desenho, não um número fixo
+  const magreza = Math.max(2, Math.round(0.02 * Math.max(C, L) / 2));
+  // mancha menor que uma vez e meia a caneta é cisco e sai fora
+  const minimo = Math.round(Math.PI / 4 * (caneta * 1.5) ** 2);
+  const { rot } = descolorir(dados, C, L, 6);
+  const tinta = tintaDoDesenho(rot, C, L, minimo, magreza, caneta);
+
+  // a linha engorda até a caneta; a mancha cheia já tem o tamanho que tem
+  const m = engordar(tinta.linhas, Math.max(1, Math.round((caneta - 1) / 2)));
+  for (let j = 0; j < m.length; j++)
+    for (let i = 0; i < m[0].length; i++) if (tinta.cheias[j][i]) m[j][i] = 1;
+  // a borda da imagem não é traço
+  for (let j = 0; j < m.length; j++) { m[j][0] = 0; m[j][m[0].length - 1] = 0; }
+  for (let i = 0; i < m[0].length; i++) { m[0][i] = 0; m[m.length - 1][i] = 0; }
+  return m;
+}
+
+/** A silhueta cheia: tira o fundo e traz o que sobrou como área. */
+function mascaraDaSilhueta(c, C, L) {
   const d = c.getImageData(0, 0, C, L);
-  // fundo é a cor das bordas; o que não é fundo vira figura. Mesmo critério do
-  // cortador, que é onde ele foi testado.
   let r = 0, g = 0, b = 0, n2 = 0;
   const soma = (i, j) => { const k = (j * C + i) * 4; r += d.data[k]; g += d.data[k+1]; b += d.data[k+2]; n2++; };
   for (let i = 0; i < C; i++) { soma(i, 0); soma(i, L - 1); }
@@ -900,8 +945,7 @@ async function carregarImagem(arq) {
     d.data[p + 3] = (perto || d.data[p + 3] < 128) ? 0 : 255;
   }
   c.putImageData(d, 0, 0);
-  const mmPorPx = 70 / Math.max(C, L);
-  novasFormas(juntarEmFormas(contornosDeMascara(cv, mmPorPx, 0, 0)));
+  return mascaraDoCanvas(c.canvas);
 }
 
 /* ---------------- atalhos ---------------- */
@@ -1035,7 +1079,7 @@ $('listaProjetos').onchange = async (e) => {
 ferramenta = 'livre'; marcarFerramenta(); marcarCor(); rotulos(); mostrarForma();
 guardar(); ajustarTela(); enquadrar();
 window.__modelador = { formas: () => formas, vista: () => vista, escolhida: () => escolhida, calcular, montarAgora: () => ultimo,
-                       carregarImagem, novasFormas, juntarEmFormas, ferramenta: (f) => { ferramenta = f; marcarFerramenta(); } };
+                       carregarImagem, novasFormas, ferramenta: (f) => { ferramenta = f; marcarFerramenta(); } };
 </script>
 </body>
 </html>
