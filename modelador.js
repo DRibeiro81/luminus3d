@@ -238,7 +238,8 @@ export function montar(formas, op) {
     let t = [];
     if (f.primitiva) {
       const c = centroDe(f.pontos);
-      t = primitiva(f.primitiva, { ...f, x: c[0], y: c[1], z: f.base || 0 });
+      t = primitiva(f.primitiva, { ...f, x: c[0], y: c[1], z: f.base || 0,
+                                   segmentos: f.segmentos || 32 });
     } else {
       const eixo = f.eixo != null ? f.eixo : Math.min(...f.pontos.map((q) => q[0])) - 1;
       revolverContorno(t, [...f.pontos, f.pontos[0]], 1, eixo, f.voltas || 1, f.segmentos || 48);

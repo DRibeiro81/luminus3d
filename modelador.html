@@ -480,6 +480,22 @@ function pintar() {
 }
 
 /** Passa a mesma conta em todos os pontos da forma, inclusive nos furos dela. */
+/**
+ * A pegada da primitiva no desenho é o tamanho REAL dela.
+ *
+ * Antes ela entrava como uma marca de 2 mm e no 3D aparecia uma bola de 10: a
+ * pessoa não tinha como saber onde a peça ia ficar nem quanto ia ocupar.
+ */
+function raioDaPrimitiva(f) {
+  if (f.primitiva === 'toro') return (f.raioCaminho || 20) + (f.raioSecao || 10);
+  return f.raio || 10;
+}
+function ajustarPegada(f) {
+  if (!f.primitiva) return;
+  const c = caixaDa(f);
+  f.pontos = elipse(c.cx, c.cy, raioDaPrimitiva(f), raioDaPrimitiva(f), 48);
+}
+
 function mapear(f, fn) {
   f.pontos = f.pontos.map(fn);
   if (f.furosInternos) f.furosInternos = f.furosInternos.map((h) => h.map(fn));
@@ -500,6 +516,17 @@ function girar(f, ang, c) {
 function redimensionar(f, k, c) {
   mapear(f, ([x, y]) => [c.cx + (x - c.cx) * k, c.cy + (y - c.cy) * k]);
   if (!f.fechado) f.traco = Math.max(0.4, f.traco * k);
+  // primitiva não vive do contorno, vive do raio: sem isso a pegada crescia e a
+  // peça continuava do mesmo tamanho
+  if (f.primitiva) {
+    f.raio = Math.max(1, (f.raio || 10) * k);
+    f.raioSecao = Math.max(0.5, (f.raioSecao || 10) * k);
+    f.raioCaminho = Math.max(1, (f.raioCaminho || 20) * k);
+    if (f.primitiva === 'cone') f.altura = Math.max(1, f.altura * k);
+    ajustarPegada(f);
+    if (escolhida === f) { $('raio').value = Math.round(f.raio);
+      $('raio2').value = Math.round(f.raioCaminho); rotulos(); }
+  }
 }
 
 function alcasDe(c) {
@@ -570,10 +597,14 @@ tela.addEventListener('pointerdown', (e) => {
   if (['esfera', 'cone', 'toro'].includes(ferramenta)) {
     const nova = {
       id: proximoId++, pontos: retangulo(p[0] - 1, p[1] - 1, 2, 2), fechado: true, traco: 0,
-      cor, base: 0, altura: +$('altura').value, furo: false, espelho: null,
+      cor, base: 0, furo: false, espelho: null,
+      // cone nasce com altura própria: com os 4 mm do controle geral ele saía
+      // achatado, parecendo um disco
+      altura: ferramenta === 'cone' ? 25 : +$('altura').value,
       primitiva: ferramenta, raio: ferramenta === 'cone' ? 25 : 10,
       raioSecao: 10, raioCaminho: 20, segmentos: 32, plano: $('planoDesenho').value,
     };
+    ajustarPegada(nova);
     formas.push(nova); escolhida = nova; mostrarForma();
     guardar(); pintar(); agendar();
     return;
@@ -785,6 +816,7 @@ for (const id of CAMPOS3D) $(id).addEventListener('input', () => {
   escolhida.voltas = +$('voltas').value / 100;
   escolhida.raio = +$('raio').value;
   escolhida.raioCaminho = +$('raio2').value;
+  ajustarPegada(escolhida);
   $('grVoltas').hidden = !escolhida.revolver;
   $('grPerfil').hidden = !!escolhida.primitiva || escolhida.revolver;
   rotulos(); pintar(); agendar();
